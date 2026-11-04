@@ -176,6 +176,12 @@ tags:
     description: >-
       AI Coach: plans, reviews and debriefs. Every route here answers 503 unless the
       instance has the Coach switched on and a provider connected.
+  - name: team
+    description: >-
+      Coaches and athletes. Every profile is one or the other (`role`); an admin coaches unless
+      set otherwise. A coach assigns copies of their own routines to athletes, sets their week,
+      and reads their training log. An athlete's own push (`PUT /api/data`) never changes the
+      plan: the stored plan is put back.
   - name: integrations
     description: >-
       Settings → Integrations: outbound webhooks now, more providers later. Off unless the
@@ -299,6 +305,20 @@ paths:
                       Present (and true) only when the instance runs with
                       PASSWORD_LOGIN=1; the client then offers name-and-password
                       sign-in next to passkeys.
+                  first_profile:
+                    type: boolean
+                    const: true
+                    description: >-
+                      Present only while the instance has no profiles: the sign-in screen then
+                      offers to create the first one without an invite link.
+                  site:
+                    type: object
+                    description: The site's name and logo, set in Admin → Site.
+                    properties:
+                      name: { type: string, description: 'The name set by an admin, else SITE_NAME, else openGym.' }
+                      logo:
+                        type: ['string', 'null']
+                        description: Path of the logo (`/api/site/logo?v=…`), or null for none.
                   default_lang:
                     type: string
                     example: pt-BR
@@ -3032,6 +3052,378 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /api/admin/user/team-role:
+    post:
+      tags: [admin]
+      operationId: adminUserTeamRole
+      summary: 'Admin: make a profile a coach or an athlete'
+      description: Any admin, for any profile but their own. Audited.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, role]
+              properties:
+                id: { type: string }
+                role: { type: string, enum: [coach, athlete] }
+      responses:
+        '200':
+          description: Done.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ok' }
+        '400':
+          description: Not a role, or your own profile.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such user.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/admin/site:
+    put:
+      tags: [admin]
+      operationId: adminSite
+      summary: 'Admin: set the site name'
+      description: An empty name goes back to `SITE_NAME`, or openGym. At most 40 characters, one line.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name: { type: string, maxLength: 40 }
+      responses:
+        '200':
+          description: The site as `/api/config` now reports it.
+          content:
+            application/json:
+              schema: { type: object, properties: { site: { type: object } } }
+        '400':
+          description: No name.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/admin/site/logo:
+    put:
+      tags: [admin]
+      operationId: adminSiteLogo
+      summary: 'Admin: upload the site logo'
+      description: A PNG, JPEG or WebP image of at most 256 KB, sent as a data URL. SVG is refused.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [data]
+              properties:
+                data: { type: string, description: "data:image/png;base64,…" }
+      responses:
+        '200':
+          description: The site as `/api/config` now reports it.
+          content:
+            application/json:
+              schema: { type: object, properties: { site: { type: object } } }
+        '400':
+          description: Not an image (`logo-invalid`), too large (`logo-too-large`), or not PNG, JPEG or WebP (`logo-type`).
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+    delete:
+      tags: [admin]
+      operationId: adminSiteLogoDelete
+      summary: 'Admin: remove the site logo'
+      responses:
+        '200':
+          description: The site as `/api/config` now reports it.
+          content:
+            application/json:
+              schema: { type: object, properties: { site: { type: object } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/site/logo:
+    get:
+      tags: [meta]
+      operationId: siteLogo
+      summary: The site logo
+      description: Public. Its address changes with every upload, so it is cached for good.
+      security: []
+      responses:
+        '200':
+          description: The image.
+          content:
+            image/png: {}
+            image/jpeg: {}
+            image/webp: {}
+        '404':
+          description: No logo set.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/team/athletes:
+    get:
+      tags: [team]
+      operationId: teamAthletes
+      summary: 'Coach: list the athletes'
+      responses:
+        '200':
+          description: One row per athlete.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  athletes:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        name: { type: string }
+                        created: { type: ['string', 'null'] }
+                        disabled: { type: boolean }
+                        workouts: { type: integer }
+                        lastWorkout: { type: ['string', 'null'] }
+                        thisWeek: { type: integer, description: Workouts in the last seven days. }
+                        routines: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/team/athlete:
+    get:
+      tags: [team]
+      operationId: teamAthlete
+      summary: 'Coach: one athlete, their plan and their log'
+      parameters:
+        - { name: id, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: >-
+            The plan (`routines`, `week` by getDay() number, `programme`, `rotation`) and what the
+            stats are drawn from (`workouts` without photos and videos, `bodyweight`,
+            `measurements`, `exWeights`, `customEx`).
+          content:
+            application/json:
+              schema: { type: object }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such athlete.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: The athlete's document cannot be read.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/team/assign:
+    post:
+      tags: [team]
+      operationId: teamAssign
+      summary: 'Coach: assign routines to athletes'
+      description: >-
+        Copies of the coach's own routines go into the plan of every athlete named. A routine
+        assigned before replaces its earlier copy. `days` puts each copy on those weekdays
+        (getDay() numbers, 0 is Sunday) and off the others. Custom exercises the routines use go
+        along.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [routines, athletes]
+              properties:
+                routines: { type: array, items: { type: string }, description: Ids of the coach's own routines. }
+                athletes: { type: array, items: { type: string } }
+                days: { type: object, additionalProperties: { type: array, items: { type: string } } }
+      responses:
+        '200':
+          description: The id of each copy, by athlete and source routine.
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean }, assigned: { type: object } } }
+        '400':
+          description: No routine of yours, or no athlete, picked.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '503':
+          description: An athlete's document cannot be read.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/team/unassign:
+    post:
+      tags: [team]
+      operationId: teamUnassign
+      summary: "Coach: remove a routine from an athlete's plan"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [athlete, routine]
+              properties:
+                athlete: { type: string }
+                routine: { type: string }
+      responses:
+        '200':
+          description: Done.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ok' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such athlete or routine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: The athlete's document cannot be read.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/team/week:
+    put:
+      tags: [team]
+      operationId: teamWeek
+      summary: "Coach: set an athlete's week"
+      description: '`week` maps a getDay() number to routine ids of their plan; a day left out is a rest day.'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [athlete, week]
+              properties:
+                athlete: { type: string }
+                week: { type: object, additionalProperties: { type: array, items: { type: string } } }
+      responses:
+        '200':
+          description: The plan as it now stands.
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean }, plan: { type: object } } }
+        '400':
+          description: No week.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such athlete.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: The athlete's document cannot be read.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/team/invites:
+    get:
+      tags: [team]
+      operationId: teamInvites
+      summary: "Coach: the coach's own athlete invites"
+      responses:
+        '200':
+          description: The invites this coach made.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  invites:
+                    type: array
+                    items: { $ref: '#/components/schemas/Invite' }
+                  invite_only: { type: boolean }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/team/invites/new:
+    post:
+      tags: [team]
+      operationId: teamInviteNew
+      summary: 'Coach: mint an athlete invite'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                note: { type: string, maxLength: 60 }
+      responses:
+        '200':
+          description: The new invite.
+          content:
+            application/json:
+              schema: { type: object, properties: { invite: { $ref: '#/components/schemas/Invite' } } }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/team/invites/revoke:
+    post:
+      tags: [team]
+      operationId: teamInviteRevoke
+      summary: "Coach: revoke one of the coach's unused invites"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [code]
+              properties:
+                code: { type: string }
+      responses:
+        '200':
+          description: Done.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Ok' }
+        '400':
+          description: Already used.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such code of yours.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /api/admin/invites:
     get:
       tags: [admin]
@@ -3073,6 +3465,11 @@ paths:
                   type: string
                   maxLength: 60
                   description: Free-form label ("for Alex").
+                role:
+                  type: string
+                  enum: [coach, athlete]
+                  default: athlete
+                  description: The role the profile made with this code gets.
       responses:
         '200':
           description: The new invite.
@@ -4593,6 +4990,7 @@ components:
           oneOf: [{ type: string }, { type: 'null' }]
           description: User id that redeemed the code (absent/null while unused).
         usedAt: { type: string }
+        role: { type: string, enum: [coach, athlete], description: The role the code hands out (athlete when absent). }
         usedByName:
           oneOf: [{ type: string }, { type: 'null' }]
           description: Resolved display name (only in GET /api/admin/invites).

@@ -73,6 +73,16 @@ const LABELS = {
   'admin.invite.create': 'Created an invite code',
   'admin.invite.revoke': 'Revoked an invite code',
   'admin.audit.clear': 'Cleared the activity log',
+  // Coaches and athletes (api/team.js), and the site's name and logo.
+  'admin.team-role': 'Made someone a coach or an athlete',
+  'admin.site': 'Changed the site name',
+  'admin.site.logo': 'Changed the site logo',
+  'admin.site.logo.remove': 'Removed the site logo',
+  'team.assign': 'A coach assigned routines',
+  'team.unassign': 'A coach took a routine out of a plan',
+  'team.week': 'A coach changed an athlete’s week',
+  'team.invite.create': 'A coach created an athlete invite',
+  'team.invite.revoke': 'A coach revoked an athlete invite',
   // FIRST_USER_ADMIN=1: the first profile on a fresh instance is made admin as it signs up.
   'admin.first-user': 'Became admin as the first profile',
   'admin.denied': 'Blocked from an admin action',

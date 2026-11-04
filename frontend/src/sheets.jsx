@@ -101,6 +101,7 @@ import { copyText } from './lib/clipboard.js'
 import { queueRemaining, pinState } from './lib/queue.js'
 import { DAY_NOTE_TAGS, DAY_NOTE_LABEL, DAY_NOTE_ICON, dayNoteOf, dayNoteLine, canNoteDay, withDayNote } from './lib/day-notes.js'
 import { isOn } from './lib/modules.js'
+import { isAthlete } from './lib/team.js'
 
 const S = () => useStore.getState().S
 const update = (...a) => useStore.getState().update(...a)
@@ -2868,6 +2869,7 @@ function PlanImport({ bundle, close }) {
 /* ============================ day override / assign ============================ */
 function DayOverride({ iso, close }) {
   const st = useStore(s => s.S)
+  const planLocked = isAthlete(useStore(s => s.user))
   const hasOvr = st.dayPlan[iso] !== undefined
   // A fulfilled pin (a coach session pinned here and since done) reads as no override, as it does
   // everywhere else — the row to clear the leftover entry stays.
@@ -2912,7 +2914,7 @@ function DayOverride({ iso, close }) {
     {effIds.includes(r.id) && <Icon name="check" className="accent" />}</div>
   return <>
     <h3>{fmtDate(iso, true)}</h3>
-    <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyNames.length ? deriveSessionName(weeklyNames) : t('Rest')}{changed && <span style={{ color: 'var(--orange)' }}> · {t('changed for this day')}</span>}<br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</div>
+    <div className="muted small" style={{ marginBottom: 12 }}>{t('Weekly plan:')} {weeklyNames.length ? deriveSessionName(weeklyNames) : t('Rest')}{changed && <span style={{ color: 'var(--orange)' }}> · {t('changed for this day')}</span>}{!planLocked && <><br />{t('Sick, missed a day or want a different session? Pick what to train instead.')}</>}</div>
     {missed && <div style={{ marginBottom: 14 }}><Button variant="primary" icon="checkCircle" onClick={logIt}>{t('Log this workout')}</Button></div>}
     {canNote && <div className="day-note" style={{ marginBottom: 14 }}>
       <div className="item day-note-row" {...tappable(() => dayNoteSheet(iso))}>
@@ -2923,15 +2925,16 @@ function DayOverride({ iso, close }) {
         <Icon name={note ? 'pencil' : 'plus'} className="chev" />
       </div>
     </div>}
-    {coach.length > 0 && <>
+    {/* An athlete's days are their coach's to move (lib/team.js): the note and the log stay. */}
+    {!planLocked && coach.length > 0 && <>
       <h4 className="sec" style={{ marginTop: 0 }}>{ownLoop ? t('Your loop') : t('Coach week')}</h4>
       <div className="list" style={{ marginBottom: 8 }}>{coach.map(row)}</div>
     </>}
-    <div className="list">
+    {!planLocked && <div className="list">
       {st.routines.filter(r => !remaining.includes(r.id)).map(row)}
       <div className="item" {...tappable(() => set('rest'))}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="moon" /></span><div className="grow"><div className="tt">{t('Rest / skip this day')}</div></div>{effIds.length === 0 && <Icon name="check" className="accent" />}</div>
       {hasOvr && <div className="item" {...tappable(() => set(''))}><span className="lrow-i" style={{ background: 'var(--surface-3)' }}><Icon name="reset" /></span><div className="grow"><div className="tt">{t('Back to weekly plan')}</div></div></div>}
-    </div>
+    </div>}
   </>
 }
 export const dayOverrideSheet = iso => ui().openSheet(close => <DayOverride iso={iso} close={close} />)
@@ -4112,7 +4115,8 @@ function doFinishWorkout() {
   })
   w.vol = workoutVolume(w)
   // Read before the session is gone: the summary offers these to their routines (#592).
-  const additions = past ? [] : routineAdditions(A, st.routines)
+  // An athlete is not offered them: the routines are their coach's (lib/team.js).
+  const additions = past || isAthlete(st.user) ? [] : routineAdditions(A, st.routines)
   let shown = w
   update(s => {
     if (past) {

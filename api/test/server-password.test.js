@@ -74,7 +74,7 @@ async function startServer(t, { env = {}, users = [], creds = [], invites = [] }
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN, RP_ID: 'localhost',
-      PASSWORD_LOGIN: '1', TRUST_PROXY: '1', INVITE_ONLY: '', ADMIN_UIDS: '', AUDIT_LOG: '1', ...env
+      PASSWORD_LOGIN: '1', TRUST_PROXY: '1', INVITE_ONLY: '0', FIRST_USER_ADMIN: '0', ADMIN_UIDS: '', AUDIT_LOG: '1', ...env
     }
   });
   const h = { api: '', log: '', dataDir };
@@ -122,7 +122,7 @@ test('signs in with the right password, case-insensitively by profile name, like
   assert.equal((await h.req('GET', '/api/config')).body.password_login, true);
   const r = await login(h, '  ANA lu ', GOOD, '198.51.100.2');
   assert.equal(r.status, 200);
-  assert.deepEqual(r.body.user, { id: 'u1', name: 'Ana Lu', admin: false });
+  assert.deepEqual(r.body.user, { id: 'u1', name: 'Ana Lu', admin: false, role: 'athlete' });
   // Same cookie as a passkey sign-in: HttpOnly, SameSite=Lax, no Secure over plain http.
   assert.ok(r.cookie);
   const raw = r.headers.getSetCookie().find(c => c.startsWith('gymsid='));

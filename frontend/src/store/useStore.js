@@ -31,6 +31,7 @@ import { DEFAULT_TEMPLATE_ID } from '../lib/structuralBalanceTemplates.js'
 import { WC_DEFAULT } from '../lib/workout-controls.js'
 import { sanitizeAccent } from '../lib/accent.js'
 import { registerExerciseAliases } from '../lib/exercise-aliases.js'
+import { keepServerPlan } from '../lib/team.js'
 
 const KEY = 'gym_state_v1'
 // Where the saved copy stands with the server: the revision it descends from, and its own `_ts`
@@ -769,6 +770,8 @@ export const useStore = create((set, get) => {
     }
     if (legacy) clearLegacy()
     const merged = Object.assign(clone(DEF), mergeStates(local, remote))
+    // An athlete's plan is the one their coach set: the server's, whatever this copy held.
+    keepServerPlan(get().user, remote, merged)
     merged.active = carryActive(local, merged)
     // A pass of this app's rotation that the merge left complete (each copy finished a session of
     // it, or one copy's refill lost to the other's older queue) starts its next pass here, as the

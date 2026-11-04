@@ -63,7 +63,7 @@ describe('Login with password sign-in', () => {
   })
 
   it('next to passkeys it is a second button, and the footer no longer says "no passwords"', () => {
-    mocks.config = { password_login: true, allow_guest: true }
+    mocks.config = { password_login: true, allow_guest: true, first_profile: true }
     const page = mount(<Login />)
     expect(buttons(page).slice(0, 3)).toEqual(['Sign in with passkey', 'Sign in with password', 'Create new profile'])
     expect(page.textContent).toContain('Passkeys use your fingerprint. A password works too, where passkeys do not.')
@@ -75,7 +75,7 @@ describe('Login with password sign-in', () => {
 
   it('a browser without passkeys gets a way in instead of "stay local"', () => {
     mocks.webauthn = false
-    mocks.config = { password_login: true, allow_guest: false }
+    mocks.config = { password_login: true, allow_guest: false, first_profile: true }
     const page = mount(<Login />)
     expect(page.textContent).toContain("This browser doesn't support passkeys. Sign in with your name and password instead.")
     expect(page.textContent).not.toContain('Try a browser or device with passkey support.')
@@ -89,14 +89,42 @@ describe('Login with password sign-in', () => {
   })
 
   it('where both work, creating a profile starts on the passkey and switches to a password', () => {
-    mocks.config = { password_login: true, invite_only: true }
+    mocks.config = { password_login: true, invite_only: false, first_profile: true }
     const page = mount(<Login />)
     act(() => button(page, 'Create new profile').click())
     const sheet = mount(mocks.sheets[0](() => {}))
     expect(buttons(sheet)).toContain('Create passkey')
     act(() => button(sheet, 'Password').click())
     expect(buttons(sheet)).toContain('Create profile')
-    expect(sheet.querySelector('input[placeholder="Invite code"]')).toBeTruthy()
     expect(sheet.querySelector('input[autocomplete="new-password"]')).toBeTruthy()
+  })
+
+  // Invite-only (lib/invite-link.js): no way to make a profile without an invite link, and with
+  // one the sheet opens by itself with the code filled in, never typed.
+  it('open signup on an instance with profiles: still no new profile without a link', () => {
+    mocks.config = { password_login: true, invite_only: false }
+    const page = mount(<Login />)
+    expect(buttons(page)).not.toContain('Create new profile')
+  })
+
+  it('invite-only: offers no new profile without a link', () => {
+    mocks.config = { password_login: true, invite_only: true }
+    const page = mount(<Login />)
+    expect(buttons(page)).not.toContain('Create new profile')
+    expect(mocks.sheets.length).toBe(0)
+  })
+
+  it('invite-only: an invite link opens the sheet with its code', () => {
+    sessionStorage.clear()
+    history.replaceState(null, '', '/?invite=ab12cd34ef56ab78')
+    mocks.config = { password_login: true, invite_only: true }
+    const page = mount(<Login />)
+    expect(location.search).toBe('')
+    expect(buttons(page)).toContain('Create new profile')
+    const sheet = mount(mocks.sheets[0](() => {}))
+    expect(sheet.textContent).toContain('Invitation AB12CD34EF56AB78')
+    act(() => button(sheet, 'Password').click())
+    expect(sheet.querySelector('input[placeholder="Invite code"]')).toBe(null)
+    sessionStorage.clear()
   })
 })

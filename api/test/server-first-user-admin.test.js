@@ -85,7 +85,7 @@ async function startServer(t, { env = {}, users = [], creds = [], deviceLinks } 
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN, RP_ID: 'localhost',
-      PASSWORD_LOGIN: '1', TRUST_PROXY: '1', INVITE_ONLY: '', ADMIN_UIDS: '', AUDIT_LOG: '1', ...env
+      PASSWORD_LOGIN: '1', TRUST_PROXY: '1', INVITE_ONLY: '0', FIRST_USER_ADMIN: '0', ADMIN_UIDS: '', AUDIT_LOG: '1', ...env
     }
   });
   const h = { api: '', log: '', dataDir };
@@ -151,8 +151,12 @@ test('the first passkey registration on an empty instance is the admin, the seco
   assert.equal('admin' in stored(h, second.body.user.id), false);
 });
 
-test('unset or FIRST_USER_ADMIN=0 leaves the first profile an ordinary one', async t => {
-  for (const off of [undefined, '', '0', 'false', 'off']) {
+// This fork turns it on by default (signup is behind invites, so the first profile is the one
+// that can make them): only an explicit off leaves the first profile an ordinary one.
+test('FIRST_USER_ADMIN=0 leaves the first profile an ordinary one; empty is on in this fork', async t => {
+  const on = await startServer(t, { env: { FIRST_USER_ADMIN: '' } });
+  assert.equal((await registerPassword(on, 'Ana', '198.51.100.29')).body.user.admin, true, 'empty');
+  for (const off of ['0', 'false', 'off']) {
     const h = await startServer(t, { env: { FIRST_USER_ADMIN: off } });
     const r = await registerPassword(h, 'Ana', '198.51.100.30');
     assert.equal(r.status, 200);

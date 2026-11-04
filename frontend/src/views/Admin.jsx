@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { api } from '../lib/api.js'
+import { api, remoteAuth } from '../lib/api.js'
+import { inviteLink } from '../lib/invite-link.js'
 import { fmtDate, fmtNum, fmtVol, fmtDur } from '../lib/format.js'
 import { auditCat, auditLine, fmtWhen } from '../lib/audit.js'
 import { workoutVolume, setsDone } from '../lib/history.js'
@@ -104,6 +105,10 @@ function UserDetail({ id, viewerOwner, onChanged, close }) {
   })
   // Password sign-in (#118): the server only sends `password` when the instance offers it. The
   // code comes back once, is shown once, and is never stored anywhere but as a hash.
+  // Coach or athlete: a coach plans for athletes (the Athletes screen), an athlete trains that plan.
+  const setTeamRole = role => api('/api/admin/user/team-role', { method: 'POST', body: JSON.stringify({ id: u.id, role }) })
+    .then(() => { toast(u.name + (role === 'coach' ? ' is a coach now' : ' is an athlete now')); onChanged(); close() })
+    .catch(e => toast(e.message))
   const pwInstance = typeof u.password === 'boolean'
   const resetPassword = () => confirmSheet({
     title: 'Reset ' + u.name + '’s password?',
@@ -130,6 +135,7 @@ function UserDetail({ id, viewerOwner, onChanged, close }) {
     <h3 className="capitalize">{u.name}</h3>
     <div className="row" style={{ gap: 6, flexWrap: 'wrap', margin: '8px 0 12px' }}>
       {u.owner ? <span className="adm-pill acc">owner</span> : u.admin && <span className="adm-pill acc">admin</span>}
+      <span className="adm-pill">{u.role === 'coach' ? 'coach' : 'athlete'}</span>
       {u.disabled && <span className="adm-pill bad">disabled</span>}
       {u.invitedBy && <span className="adm-pill">invite {u.invitedBy}</span>}
       {u.password && <span className="adm-pill">password</span>}
@@ -146,6 +152,14 @@ function UserDetail({ id, viewerOwner, onChanged, close }) {
       <div className="tile"><div className="l">Routines</div><div className="v v-sm">{d.routines.length}</div></div>
       <div className="tile"><div className="l">Last sync</div><div className="v" style={{ fontSize: 'var(--fs-subhead)' }}>{rel(d.lastSync)}</div></div>
     </div>
+    {u.id !== me?.id && <>
+      <button className="btn" style={{ margin: '12px 0 4px' }}
+        onClick={() => u.role === 'coach'
+          ? confirmSheet({ title: 'Make ' + u.name + ' an athlete?', message: 'They train the plan a coach sets and can no longer change it, nor plan for anyone else.', confirmText: 'Make athlete', onConfirm: () => setTeamRole('athlete') })
+          : confirmSheet({ title: 'Make ' + u.name + ' a coach?', message: 'They can plan for every athlete, see their training and invite new athletes. Their own plan becomes theirs to change.', confirmText: 'Make coach', onConfirm: () => setTeamRole('coach') })}>
+        {u.role === 'coach' ? 'Make athlete' : 'Make coach'}</button>
+      <div className="adm-hint">{u.role === 'coach' ? 'Coaches plan for every athlete and see their training.' : 'Athletes train the plan their coach sets.'}</div>
+    </>}
     {viewerOwner && !u.owner && !u.disabled && <>
       <button className="btn" style={{ margin: '12px 0 4px' }}
         onClick={() => u.admin
@@ -208,8 +222,8 @@ function UserDetail({ id, viewerOwner, onChanged, close }) {
 
 function InvitesCard({ invites, reload, inviteOnly }) {
   const toast = useUI(s => s.toast)
-  const gen = () => api('/api/admin/invites/new', { method: 'POST', body: '{}' })
-    .then(({ invite }) => { navigator.clipboard?.writeText(invite.code).catch(() => {}); toast('Code ' + invite.code + ' created & copied'); reload() })
+  const gen = role => api('/api/admin/invites/new', { method: 'POST', body: JSON.stringify({ role }) })
+    .then(({ invite }) => { navigator.clipboard?.writeText(linkOf(invite.code)).catch(() => {}); toast((role === 'coach' ? 'Coach' : 'Athlete') + ' invite link created & copied'); reload() })
     .catch(e => toast(e.message))
   const revoke = code => confirmSheet({
     title: 'Revoke code ' + code + '?', message: 'Anyone who has it can no longer use it. People who already signed up with it are not affected.',
@@ -217,21 +231,31 @@ function InvitesCard({ invites, reload, inviteOnly }) {
     onConfirm: () => api('/api/admin/invites/revoke', { method: 'POST', body: JSON.stringify({ code }) })
       .then(() => { toast('Code revoked'); reload() }).catch(e => toast(e.message))
   })
-  const copy = code => { navigator.clipboard?.writeText(code).catch(() => {}); toast('Copied ' + code) }
+  // The link, not the bare code: the sign-in screen offers a new profile only to someone who opens
+  // one (lib/invite-link.js).
+  const linkOf = code => inviteLink(code, { server: remoteAuth()?.base })
+  const copy = code => { navigator.clipboard?.writeText(linkOf(code)).catch(() => {}); toast('Invite link copied (' + code + ')') }
   const open = (invites || []).filter(i => !i.usedBy)
   const used = (invites || []).filter(i => i.usedBy)
   return <div className="card">
     <div className="row between"><h2 style={{ margin: 0 }}>Invite codes</h2>
-      <Button variant="primary" size="sm" onClick={gen} icon="plus">New code</Button></div>
+      <div className="row" style={{ gap: 6 }}>
+        <Button size="sm" onClick={() => gen('coach')} icon="plus">Coach</Button>
+        <Button variant="primary" size="sm" onClick={() => gen('athlete')} icon="plus">Athlete</Button>
+      </div></div>
     <div className="adm-lead">
       {inviteOnly
-        ? 'Sign-up is invite-only: someone needs one of these codes to create a profile. Each code works once.'
+        ? 'Sign-up is invite-only: someone needs one of these links to create a profile. Tap a code to copy its link. Each works once.'
         : 'Sign-up is open, so codes are optional here. They only record who invited whom.'}
+      {' '}A code makes the new profile a coach or an athlete. Coaches can also invite athletes from their Athletes screen.
     </div>
     {open.length ? <>
       <div className="adm-group-t">Unused · tap to copy</div>
       {open.map(i => <div key={i.code} className="row between" style={{ padding: '6px 0', borderBottom: 'var(--hair) solid var(--sep)' }}>
-        <button className="adm-code" onClick={() => copy(i.code)} aria-label={'copy ' + i.code}>{i.code}</button>
+        <div className="row" style={{ gap: 6 }}>
+          <button className="adm-code" onClick={() => copy(i.code)} aria-label={'copy ' + i.code}>{i.code}</button>
+          <span className="adm-pill">{i.role === 'coach' ? 'coach' : 'athlete'}</span>
+        </div>
         <div className="row" style={{ gap: 4 }}>
           <button className="iconbtn adm-iconbtn" onClick={() => copy(i.code)} aria-label="copy"><Icon name="copy" /></button>
           <button className="iconbtn adm-iconbtn" style={{ color: 'var(--red)' }} onClick={() => revoke(i.code)} aria-label="revoke"><Icon name="trash" /></button>
@@ -244,7 +268,48 @@ function InvitesCard({ invites, reload, inviteOnly }) {
         <span style={{ fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', letterSpacing: '.06em' }}>{i.code}</span><span>→ {i.usedByName || 'used'}</span>
       </div>)}
     </> : null}
-    {!open.length && !used.length && <div className="adm-empty">No codes yet. "New code" makes one and copies it to your clipboard.</div>}
+    {!open.length && !used.length && <div className="adm-empty">No codes yet. "Coach" or "Athlete" makes one and copies its link to your clipboard.</div>}
+  </div>
+}
+
+// The site's name and logo: the sign-in screen, the header and the browser tab show them. The logo
+// is read here and sent as a data URL; the server checks it is a PNG, JPEG or WebP of 256 KB at most.
+function SiteCard() {
+  const toast = useUI(s => s.toast)
+  const config = useStore(s => s.config)
+  const refreshConfig = useStore(s => s.refreshConfig)
+  const site = config?.site || { name: 'openGym', logo: null }
+  const [name, setName] = useState(site.name)
+  const file = useRef(null)
+  useEffect(() => { setName(site.name) }, [site.name])
+  const done = () => refreshConfig().then(() => toast('Saved'))
+  const saveName = () => api('/api/admin/site', { method: 'PUT', body: JSON.stringify({ name }) }).then(done).catch(e => toast(e.message))
+  const upload = e => {
+    const f = e.target.files?.[0]
+    e.target.value = ''
+    if (!f) return
+    if (f.size > 256 * 1024) return toast('The logo can be at most 256 KB')
+    const r = new FileReader()
+    r.onload = () => api('/api/admin/site/logo', { method: 'PUT', body: JSON.stringify({ data: r.result }) }).then(done).catch(err => toast(err.message))
+    r.readAsDataURL(f)
+  }
+  const removeLogo = () => api('/api/admin/site/logo', { method: 'DELETE' }).then(done).catch(e => toast(e.message))
+  return <div className="card">
+    <h2 style={{ margin: 0 }}>Site</h2>
+    <div className="adm-lead">The name and logo everyone sees: on the sign-in screen, at the top of the app and in the browser tab. An empty name goes back to the default.</div>
+    <div className="row" style={{ gap: 8 }}>
+      <input className="input grow" value={name} maxLength={40} onChange={e => setName(e.target.value)} aria-label="site name" />
+      <Button size="sm" variant="primary" onClick={saveName} disabled={name.trim() === site.name}>Save</Button>
+    </div>
+    <div className="row" style={{ gap: 12, marginTop: 12, alignItems: 'center' }}>
+      {site.logo
+        ? <img src={site.logo} alt="" style={{ width: 56, height: 56, objectFit: 'contain', borderRadius: 12, background: 'var(--fill-3)' }} />
+        : <div className="adm-empty" style={{ margin: 0 }}>No logo</div>}
+      <input ref={file} type="file" accept="image/png,image/jpeg,image/webp" hidden onChange={upload} />
+      <Button size="sm" onClick={() => file.current?.click()}>{site.logo ? 'Change logo' : 'Upload logo'}</Button>
+      {site.logo && <Button size="sm" variant="danger" onClick={removeLogo}>Remove</Button>}
+    </div>
+    <div className="adm-hint">PNG, JPEG or WebP, at most 256 KB. A square image works best.</div>
   </div>
 }
 
@@ -389,6 +454,8 @@ export default function Admin() {
         page on a box that never enabled it is byte-for-byte the page it was before. */}
     <div ref={coachRef} className="adm-coach-anchor"><AdminCoach /></div>
 
+    <SiteCard />
+
     <InvitesCard invites={invites} reload={loadInvites} inviteOnly={inviteOnly} />
 
     <div className="card">
@@ -396,7 +463,7 @@ export default function Admin() {
       <div className="adm-lead">Everyone with a profile on this instance. Tap one to see their activity, to disable the account (nothing is deleted) or to delete it with all their data for good.</div>
       <div className="list">
         {(users || []).map(u => <div key={u.id} className="item" onClick={() => openUser(u.id)} style={u.disabled ? { opacity: .55 } : null}>
-          <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginInlineEnd: 5 }} />}{u.name} {u.admin && <span className="adm-pill acc" style={{ marginInlineStart: 4 }}>{u.owner ? 'owner' : 'admin'}</span>}{u.disabled && <span className="adm-pill bad" style={{ marginInlineStart: 4 }}>disabled</span>}</div>
+          <div className="grow"><div className="tt">{u.live && <Icon name="dot" style={{ fontSize: 9, color: 'var(--green)', display: 'inline-block', marginInlineEnd: 5 }} />}{u.name} {u.admin && <span className="adm-pill acc" style={{ marginInlineStart: 4 }}>{u.owner ? 'owner' : 'admin'}</span>}<span className="adm-pill" style={{ marginInlineStart: 4 }}>{u.role === 'coach' ? 'coach' : 'athlete'}</span>{u.disabled && <span className="adm-pill bad" style={{ marginInlineStart: 4 }}>disabled</span>}</div>
             <div className="ss">{u.live ? 'training now · ' + u.live.name : u.workouts + ' workouts' + (u.lastWorkout ? ' · last ' + fmtDate(u.lastWorkout) : '') + ' · last sync ' + rel(u.lastSync)}</div>
             {u.email && <div className="ss" title="sign-in e-mail">{u.email}</div>}</div>
           {u.hasPush && <Icon name="bell" title="push notifications on" style={{ fontSize: 'var(--fs-subhead)', color: 'var(--label-3)' }} />}<Icon name="chevronRight" className="chev" />

@@ -80,6 +80,7 @@ import { openSeasonal } from '../components/Seasonal.jsx'
 import { useNfcSupported, nfcStickerSheet } from '../components/Nfc.jsx'
 import { dailyModeOf, settleAll } from '../lib/weigh-ins.js'
 import { voiceShortcutsSheet, voiceRowTitle } from '../components/VoiceShortcuts.jsx'
+import { isCoach } from '../lib/team.js'
 
 /* Settings (v1.3.11). The root is one screen: an account card, eleven rows that each open a page
    (/settings/<page>), and a search over every row. Rare things live one level further down
@@ -1192,6 +1193,7 @@ export default function Settings({ page = null, find = null, via = null, entryKe
       {user && !DEMO && <ServerSyncSection>
         {MOBILE && <>
           {user.admin && <Row icon="crown" iconTint="var(--indigo)" title={t('Admin dashboard')} accessory="chevron" onClick={() => nav('/admin')} />}
+          {isCoach(user) && <Row icon="person" iconTint="var(--orange)" title={t('Athletes')} accessory="chevron" onClick={() => nav('/team')} />}
           {/* A code to sign in on a computer (#551), behind the same proof as in a browser. */}
           <DeviceLinkRow state={passkeys.st} />
           <AccountIdRow id={user.id} />
@@ -1216,6 +1218,7 @@ export default function Settings({ page = null, find = null, via = null, entryKe
             onClick={() => window.open(REPO, '_blank', 'noopener')} />
         </> : user ? <>
           {user.admin && <Row icon="crown" iconTint="var(--indigo)" title={t('Admin dashboard')} accessory="chevron" onClick={() => nav('/admin')} />}
+          {isCoach(user) && <Row icon="person" iconTint="var(--orange)" title={t('Athletes')} subtitle={t('Plan for your athletes and see their training.')} accessory="chevron" onClick={() => nav('/team')} />}
           <PasskeysRow state={passkeys.st} changed={credsChanged} />
           <DeviceLinkRow state={passkeys.st} />
           <Row icon="qr" iconTint="var(--blue)" title={t('Pair the mobile app')} subtitle={t('Connect the openGym app on your phone to this account.')} accessory="chevron"

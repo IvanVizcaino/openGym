@@ -24,6 +24,7 @@ import { POLICIES_FOR, POLICY_NAME, POLICY_DESC, profileRule } from '../lib/prog
 import BodyMap from '../components/BodyMap.jsx'
 import { loadOfRoutine, rankOf, MUSCLE_NAME } from '../lib/muscles.js'
 import { viewTarget, exUnitOf } from '../lib/ex-unit.js'
+import { isAthlete } from '../lib/team.js'
 
 export const ROUTINE_LONG_PRESS_MS = 380
 export const ROUTINE_DRAG_SLOP = 8
@@ -362,7 +363,35 @@ export function undoRemoveRoutineExercise({ routineId, i, before, after, base, d
   return true
 }
 
+// An athlete's routine is their coach's to change (lib/team.js): the same list, nothing to edit.
+function RoutineView({ r, S, nav }) {
+  const units = supersetUnits(r.ex)
+  const ssPos = new Map()
+  units.filter(u => u.length > 1).forEach((u, k) => u.forEach((idx, n) => ssPos.set(idx, String.fromCharCode(65 + (k % 26)) + (n + 1))))
+  return <div className="narrow">
+    <div className="hdr">
+      <button className="iconbtn" data-back="/plan" onClick={() => nav('/plan')} aria-label={t('Plan')}><Icon name="chevronLeft" /></button>
+      <div style={{ flex: 1, margin: '0 12px' }}><h1 style={{ margin: 0 }}>{r.name}</h1>
+        <div className="sub">{t('Set by your coach')}</div></div>
+      <span className="iconbtn" aria-hidden="true"><Icon name={glyphOf(r.emoji)} /></span>
+    </div>
+    {r.ex.length ? <div className="list">{r.ex.map((e, i) => {
+      const ex = exOr(e.id)
+      return <div key={i} className={'item' + (ssPos.has(i) ? ' in-ss' : '')}>
+        {ssPos.has(i) && <span className="ss-pos" aria-label={t('Superset position {0}', ssPos.get(i))}>{ssPos.get(i)}</span>}
+        <Thumb ex={ex} />
+        <div className="grow"><div className={`tt ${exerciseNameClass(ex)}`}>{exerciseNameFor(ex)}</div>
+          <div className="ss">{exLine(viewTarget(S, e.id, e), exUnitOf(S, e.id), speedUnitOf(S))}</div>
+          {e.note && <div className="small dim" style={{ marginTop: 2 }}>{e.note}</div>}</div>
+      </div>
+    })}</div> : <div className="empty">{t('No exercises yet.')}</div>}
+    <p className="sect-f">{t('Your coach plans this routine. Ask them for a change.')}</p>
+    <Button icon="note" onClick={() => printPlanSheet({ routineId: r.id, name: r.name || t('Routine') })}>{t('Print / Save as PDF')}</Button>
+  </div>
+}
+
 export default function RoutineEdit() {
+  const athlete = isAthlete(useStore(s => s.user))
   const nav = useNavigate()
   const { id } = useParams()
   const S = useStore(s => s.S)
@@ -379,6 +408,7 @@ export default function RoutineEdit() {
     edit(exercises => { reorderRoutineUnit(exercises, sourceIndex, targetSlot) })
   })
   if (!r) return null
+  if (athlete) return <RoutineView r={r} S={S} nav={nav} />
   // The arrows move one exercise (#377): inside its superset, out of it at the edge, and past a
   // whole neighbouring unit otherwise (lib/history.js moveRoutineEntry). Drag moves supersets whole.
   const move = (i, dir) => {

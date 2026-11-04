@@ -46,7 +46,7 @@ async function startServer(t, { env = {}, users = [], creds = [], deviceLinks } 
     cwd: API, stdio: ['ignore', 'pipe', 'pipe'],
     env: {
       ...process.env, PORT: '0', DATA_DIR: dataDir, ORIGIN, RP_ID: 'localhost',
-      PASSWORD_LOGIN: '1', TRUST_PROXY: '1', INVITE_ONLY: '', ADMIN_UIDS: '', AUDIT_LOG: '1', ...env
+      PASSWORD_LOGIN: '1', TRUST_PROXY: '1', INVITE_ONLY: '0', FIRST_USER_ADMIN: '0', ADMIN_UIDS: '', AUDIT_LOG: '1', ...env
     }
   });
   const h = { api: '', log: '', dataDir };
@@ -456,7 +456,7 @@ test('a device link: made with proof, kept only as a hash, redeemed once by a ne
     body: { code, cid: opt.body.cid, credential: phone.attestation(opt.body.options.challenge), name: 'Phone' }, ip: '198.51.100.41'
   });
   assert.equal(done.status, 200, JSON.stringify(done.body));
-  assert.deepEqual(done.body.user, { id: 'u1', name: 'Ana', admin: false });
+  assert.deepEqual(done.body.user, { id: 'u1', name: 'Ana', admin: false, role: 'athlete' });
   assert.ok(done.cookie);
   assert.equal((await h.req('GET', '/api/me', { cookie: done.cookie })).body.user.id, 'u1');
   const row = h.db().creds.find(c => c.id === phone.id);

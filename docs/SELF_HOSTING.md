@@ -268,6 +268,33 @@ first profile, so switching it on now does nothing. Do this instead:
 The [AI Coach](AI_COACH.md#turning-it-on), invite codes and recovery codes all live in that
 dashboard, so this is step one for each of them.
 
+### Coaches and athletes
+
+Every profile is a **coach** or an **athlete**. A coach plans; an athlete trains the plan their
+coach set and sees their own stats, but cannot change the plan (the server puts the stored plan
+back on every sync, `api/team.js`). Admins are coaches unless set otherwise.
+
+This fork is a coached gym by default: `INVITE_ONLY`, `FIRST_USER_ADMIN` and `ALLOW_GUEST` default
+to `1`, `1` and `0` even when `.env` leaves them out (set `INVITE_ONLY=0` to open signup). The
+very first profile on an empty instance needs no code and becomes the owner. On an instance that
+already has profiles and no admin, put your id in `ADMIN_UIDS`, or nobody can make a code. From
+then on:
+
+- the owner (or any admin) makes **coach** codes in **Admin → Invite codes**, and can switch any
+  profile between coach and athlete from its row in **Users**;
+- a coach makes **athlete** codes in **Settings → Account → Athletes** (also the **Athletes**
+  button on Plan);
+- a coach builds routines in their own Plan, then on **Athletes** assigns them to one or several
+  athletes, on the weekdays picked. Assigning the same routine again replaces the athlete's copy.
+  Each athlete's page shows their week (tap a day to change it), their routines, their stats and
+  their workout history.
+
+### Site name and logo
+
+**Admin → Site** sets the name and logo shown on the sign-in screen and in the browser tab. The
+logo is a PNG, JPEG or WebP image of at most 256 KB, kept as `./data/site-logo.*`; the name is in
+`./data/site.json`. `SITE_NAME` in `.env` is the name until an admin sets one.
+
 ### Default language
 
 An instance whose people share a language can start everyone in it:

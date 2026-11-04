@@ -57,6 +57,8 @@ import MobileOnboarding from './views/MobileOnboarding.jsx'
 import PermissionSteps from './views/PermissionSteps.jsx'
 import Home from './views/Home.jsx'
 import Plan from './views/Plan.jsx'
+import { isAthlete, isCoach } from './lib/team.js'
+import { siteOf } from './lib/site.js'
 import Workout from './views/Workout.jsx'
 
 // Screens most sessions never open (the Coach, the admin dashboard, photos, measurements, the
@@ -75,6 +77,8 @@ function lazyView(load) {
   }
 }
 const Admin = lazyView(() => import('./views/Admin.jsx'))
+const Team = lazyView(() => import('./views/Team.jsx'))
+const TeamAthlete = lazyView(() => import('./views/Team.jsx').then(m => ({ default: m.TeamAthlete })))
 const CoachChat = lazyView(() => import('./views/CoachChat.jsx'))
 const Measurements = lazyView(() => import('./views/Measurements.jsx'))
 const CoachIntake = lazyView(() => import('./views/CoachIntake.jsx'))
@@ -181,6 +185,15 @@ function Shell() {
   // Same shape as the language: a module-level display setting, pushed when it changes (#139).
   useEffect(() => { setWeightDecimals(S.wdec) }, [S.wdec])
   useEffect(() => { document.documentElement.lang = lang }, [langV, lang])
+  // The tab's title and icon follow the site's name and logo (Admin → Site).
+  const site = siteOf(config)
+  useEffect(() => {
+    document.title = site.name
+    let link = document.querySelector('link[rel="icon"][data-site]')
+    if (!site.logo) { link?.remove(); return }
+    if (!link) { link = document.createElement('link'); link.rel = 'icon'; link.dataset.site = ''; document.head.appendChild(link) }
+    link.href = site.logo
+  }, [site.name, site.logo])
   // Forward navigation starts at the top; going back lands where you left off.
   // The position is recorded from scroll events rather than read at route
   // change, because by then a shorter page may already have clamped it.
@@ -338,8 +351,11 @@ function Shell() {
       {isOn(S, 'checkin') && <Route path="/checkin" element={<CheckIn />} />}
       <Route path="/plan" element={<Plan />} />
       <Route path="/plan/r/:id" element={<RoutineEdit />} />
-      <Route path="/plan/programmes" element={<Programmes />} />
-      <Route path="/plan/prog/:id" element={<ProgrammeEdit />} />
+      {/* An athlete's programme is their coach's to start (lib/team.js). */}
+      <Route path="/plan/programmes" element={isAthlete(user) ? <Navigate to="/plan" replace /> : <Programmes />} />
+      <Route path="/plan/prog/:id" element={isAthlete(user) ? <Navigate to="/plan" replace /> : <ProgrammeEdit />} />
+      <Route path="/team" element={isCoach(user) ? <Team /> : <Navigate to="/home" replace />} />
+      <Route path="/team/:id" element={isCoach(user) ? <TeamAthlete /> : <Navigate to="/home" replace />} />
       <Route path="/workout" element={<Workout />} />
       <Route path="/stats" element={<Stats />} />
       <Route path="/history" element={<History />} />

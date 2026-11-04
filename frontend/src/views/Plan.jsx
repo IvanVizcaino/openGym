@@ -31,6 +31,7 @@ import {
   chooseRotation, chooseFixedWeek, sequenceOf, isSimpleSequence, segmentAt, REST,
 } from '../lib/rotation.js'
 import { isOn } from '../lib/modules.js'
+import { isAthlete, isCoach } from '../lib/team.js'
 
 // Plan has two views (v1.3.11): Schedule (how you train, and when) and Routines (what you
 // train). The last one you looked at comes back: a per-device convenience, never synced, so it
@@ -150,6 +151,8 @@ export default function Plan() {
      Coach surface uses, so an instance without the feature sees exactly the header it would have
      without it. */
   const showCoach = isOn(S, 'coach') && coachAvailable(config, user, { demo: DEMO, mobile: MOBILE, coachMode })
+  // An athlete's plan is their coach's (lib/team.js): shown, never changed here.
+  const locked = isAthlete(user)
 
   // Share, print, import and starter plans: one menu behind the header button, so the
   // two views below are only about the plan itself.
@@ -176,25 +179,64 @@ export default function Plan() {
   return <div className="narrow plan">
     <div className="hdr">
       <SeasonDeco spot="header-bats" />
-      <div><h1>{t('Plan')}</h1><div className="sub">{mode === 'rotation' ? t('Your routines in a loop') : t('Your weekly routine')}</div></div>
+      <div><h1>{t('Plan')}</h1><div className="sub">{locked ? t('Set by your coach') : mode === 'rotation' ? t('Your routines in a loop') : t('Your weekly routine')}</div></div>
       <div className="hdr-actions">
-        {showCoach && <Button size="sm" variant="tinted" icon="sparkles" onClick={() => nav('/coach')}>{t('Coach')}</Button>}
-        <button className="iconbtn" data-tour="plan-menu" onClick={openMenu} aria-label={t('Plan options')} title={t('Plan options')}><Icon name="share" /></button>
+        {showCoach && !locked && <Button size="sm" variant="tinted" icon="sparkles" onClick={() => nav('/coach')}>{t('Coach')}</Button>}
+        {isCoach(user) && <Button size="sm" variant="tinted" icon="person" onClick={() => nav('/team')}>{t('Athletes')}</Button>}
+        {locked
+          ? planHasRoutines(S) && <button className="iconbtn" onClick={printWholePlan} aria-label={t('Print / Save as PDF')} title={t('Print / Save as PDF')}><Icon name="note" /></button>
+          : <button className="iconbtn" data-tour="plan-menu" onClick={openMenu} aria-label={t('Plan options')} title={t('Plan options')}><Icon name="share" /></button>}
       </div>
     </div>
     <input ref={fileRef} type="file" accept="application/json,.json" onChange={pickFile} hidden />
     <Segmented className="plan-views" tour="plan-views" value={view} onChange={setView}
       options={[{ value: 'schedule', label: t('Schedule') }, { value: 'routines', label: t('Routines') }]} />
-    {progChip && <button type="button" className="prog-strip" onClick={() => nav('/plan/programmes')}>
+    {progChip && <button type="button" className="prog-strip" disabled={locked} onClick={() => nav('/plan/programmes')}>
       <Icon name="calendar" /><span className="grow">{S.programmes?.[S.programme?.id]?.name || t('Programme')}</span><span className="tag acc">{progChip}</span>
     </button>}
     {view === 'routines'
-      ? <Routines S={S} update={update} nav={nav} />
-      : <Schedule S={S} update={update} nav={nav} mode={mode} />}
+      ? <Routines S={S} update={update} nav={nav} locked={locked} />
+      : locked ? <LockedSchedule S={S} nav={nav} mode={mode} /> : <Schedule S={S} update={update} nav={nav} mode={mode} />}
   </div>
 }
 
 /* ================================ Schedule ================================ */
+
+// An athlete's week as their coach set it: what is on each day, a tap opens the routine.
+function LockedSchedule({ S, nav, mode }) {
+  const todayDow = new Date().getDay()
+  const routineOf = id => S.routines.find(x => x.id === id)
+  const qv = mode === 'rotation' && queueOf(S) ? queueView(S, todayISO()) : null
+  if (!S.routines.length) return <EmptyState className="plan-empty" icon="clipboard" title={t('No plan yet.')} text={t('Your coach has not planned anything for you yet.')} />
+  if (qv) return <>
+    <h4 className="sec">{t('The loop')}</h4>
+    <div className="list plan-loop">{qv.items.map((item, i) => {
+      const r = routineOf(item.id)
+      return <div key={i} className={'item rotation-row' + (item.state === 'done' ? ' is-done' : '')} {...(r ? tappable(() => nav('/plan/r/' + r.id)) : {})}>
+        <span className={'plan-order' + (item.state === 'next' ? ' next' : '')}>{item.state === 'done' ? <Icon name="check" /> : i + 1}</span>
+        <span className="lrow-i"><Icon name={glyphOf(r?.emoji)} /></span>
+        <div className="grow"><div className="tt">{r?.name ?? item.id}</div><div className="ss">{r ? exCount(r.ex.length) : ''}</div></div>
+      </div>
+    })}</div>
+  </>
+  return <>
+    <h4 className="sec">{t('This week')}</h4>
+    <div className="list plan-week">{weekOrder(weekStartOf(S)).map(d => {
+      const rs = [].concat(S.week[d] || []).map(routineOf).filter(Boolean)
+      return <div key={d} className="item plan-day" data-day={d} aria-label={t(DAYN[d])} {...(rs.length === 1 ? tappable(() => nav('/plan/r/' + rs[0].id)) : {})}>
+        <span className={'plan-day-n' + (d === todayDow ? ' today' : '')} aria-hidden="true">{t(DAYS[d])}</span>
+        <span className={'lrow-i' + (rs.length ? '' : ' rest')}><Icon name={rs.length ? glyphOf(rs[0].emoji) : 'moon'} /></span>
+        <div className="grow">
+          <div className="tt">{rs.length ? deriveSessionName(rs.map(r => r.name)) : t('Rest day')}</div>
+          <div className="ss">{rs.length === 1 ? exCount(rs[0].ex.length) : rs.length ? routineCount(rs.length) : ''}</div>
+        </div>
+        {rs.length > 0 && <MiniBodyMap routines={rs} body={S.body} />}
+        {rs.length === 1 && <Icon name="chevronRight" className="chev" />}
+      </div>
+    })}</div>
+    <p className="sect-f">{t('Your coach plans your week. Ask them for a change.')}</p>
+  </>
+}
 
 function Schedule({ S, update, nav, mode }) {
   const [editLoop, setEditLoop] = useState(false)
@@ -412,7 +454,7 @@ function Schedule({ S, update, nav, mode }) {
 
 /* ================================ Routines ================================ */
 
-function Routines({ S, update, nav }) {
+function Routines({ S, update, nav, locked }) {
   const [edit, setEdit] = useState(false)
   const [flash, setFlash] = useState(null)
   const swipe = workoutControls(S).swipeSets
@@ -453,6 +495,16 @@ function Routines({ S, update, nav }) {
   const order = weekOrder(weekStartOf(S))
   const daysOf = id => order.filter(d => [].concat(S.week[d] || []).includes(id)).map(d => t(DAYS[d]))
   const sub = r => [exCount(r.ex.length), daysOf(r.id).join(', ')].filter(Boolean).join(' · ')
+
+  if (locked) return routines.length
+    ? <><div className="list routine-list plan-routines">{routines.map(r =>
+      <div key={r.id} className="item plan-routine" {...tappable(() => nav('/plan/r/' + r.id))}>
+        <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
+        <div className="grow"><div className="tt">{r.name}</div><div className="ss">{sub(r)}</div></div>
+        <MiniBodyMap routines={[r]} body={S.body} />
+        <Icon name="chevronRight" className="chev" /></div>)}</div>
+      <p className="sect-f">{t('Your coach plans these routines. Tap one to see it.')}</p></>
+    : <EmptyState icon="clipboard" title={t('No plan yet.')} text={t('Your coach has not planned anything for you yet.')} />
 
   return <>
     <div className="row between plan-sec-h plan-routines-bar">

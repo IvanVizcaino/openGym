@@ -54,7 +54,7 @@ afterEach(() => { act(() => { mounted.splice(0).forEach(({ root, host }) => { ro
 
 describe('Login: a code from another device', () => {
   it('sits under the ways in where passkeys work, and opens the sheet that redeems a code', () => {
-    mocks.config = { allow_guest: true }
+    mocks.config = { allow_guest: true, first_profile: true }
     const page = mount(<Login />)
     const all = buttons(page)
     expect(all.indexOf('Use a code from your other device')).toBe(all.indexOf('Create new profile') + 1)

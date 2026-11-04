@@ -138,6 +138,19 @@ if another device wrote in between, the server answers 409 with the current docu
 client merges (`lib/sync-merge.js`) and retries. Every change carries its own stamp, per setting
 and per field, so the newest edit of each wins and deletions stay deleted.
 
+### Coaches and athletes (`api/team.js`, `api/team-plan.js`, `frontend/src/lib/team.js`)
+
+Every user has a `role`, `coach` or `athlete` (admins coach unless set otherwise; invites carry
+the role they hand out). The plan fields of an athlete's document (`PLAN_FIELDS`: routines, week,
+dayPlan, programmes, programme, rotation, scheduleMode, plus `queue` unless a rotation runs) are
+the coach's: `PUT /api/data` puts the stored plan and its stamps back for an athlete (`lockPlan`),
+and an athlete's device does the same on every merge (`useStore` mergeInto → `keepServerPlan`).
+Both import the one rule from `api/team-plan.js`, which is import-free so the web image can copy it
+next to `api/coach/core`. Coaches write an athlete's plan only through `/api/team/*`
+(`changeState` in server.js: next revision, new write id, stamped like an app edit). The UI is
+`views/Team.jsx`; Plan and RoutineEdit go read-only for athletes. Admin → Site sets the name and
+logo (`DATA_DIR/site.json`, `site-logo.*`, `site` in `/api/config`, `lib/site.js`).
+
 ### Code that exists twice on purpose
 
 The API image cannot import the frontend, so some rules are hand-copied. Change both sides

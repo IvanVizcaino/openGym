@@ -111,8 +111,9 @@ api:
     RP_ID: opengym.example.com
     ORIGIN: https://opengym.example.com
     RP_NAME: openGym
-    INVITE_ONLY: ""          # "1" = signup needs an invite code
-    ALLOW_GUEST: ""          # "0" = no "Continue without account"
+    INVITE_ONLY: "1"         # "1" = signup needs an invite code
+    FIRST_USER_ADMIN: "1"    # the first profile on an empty instance is the owner
+    ALLOW_GUEST: "0"         # "0" = no "Continue without account"
     DEFAULT_LANG: ""         # en, de, pt-BR, th, ...
     PASSWORD_LOGIN: ""       # "1" = password sign-in next to passkeys
     # TRUST_PROXY stays off here on purpose, see kubernetes/deployment.yaml.

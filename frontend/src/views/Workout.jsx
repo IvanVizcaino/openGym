@@ -71,6 +71,7 @@ import { setTrendOn, setTrendsFor, trendGlyph, trendLabel } from '../lib/set-tre
 import { formulaOf } from '../lib/onerm.js'
 import { setNoteOf } from '../lib/set-notes.js'
 import { isOn } from '../lib/modules.js'
+import { isAthlete } from '../lib/team.js'
 
 // How long after a key starts a hold the same key is not yet its "Done" (#133). A USB button
 // that bounces, or a double press, sends two presses a moment apart: the first starts the hold,
@@ -1490,9 +1491,11 @@ function ActiveWorkout() {
   // exercise's ⋯ menu, there only while the routine's slot says something else than the session
   // did. Sets, reps and weight are not part of it (routineChangesFromEntry).
   const restWord = v => (Number(v) > 0 ? fmtRest(v) : Number(v) < 0 ? t('No timer') : t('Default ({0})', fmtRest(S.restSec)))
+  // An athlete's routines are their coach's (lib/team.js): a session never writes back into them.
+  const planLocked = isAthlete(useStore.getState().user)
   const routineUpdateFor = idx => {
     const entry = A.entries[idx]
-    const routine = !editing && entry?.rid ? S.routines.find(r => r.id === entry.rid) : null
+    const routine = !editing && !planLocked && entry?.rid ? S.routines.find(r => r.id === entry.rid) : null
     const found = routine ? routineChangesFromEntry(routine, A.entries, idx, barFloor(S, entry.id)) : null
     if (!found) return null
     const activeId = A.id
@@ -1525,7 +1528,7 @@ function ActiveWorkout() {
   // share of today's first work weight. Only on a planned exercise with warm-ups to keep.
   const keepWarmupsFor = idx => {
     const entry = A.entries[idx]
-    const routine = !editing && entry?.rid ? S.routines.find(r => r.id === entry.rid) : null
+    const routine = !editing && !planLocked && entry?.rid ? S.routines.find(r => r.id === entry.rid) : null
     if (!routine || !(entry.sets || []).some(isWarmupRow)) return null
     const at = routineSlotIndex(routine, A.entries, idx)
     if (at < 0) return null

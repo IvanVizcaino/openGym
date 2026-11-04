@@ -30,6 +30,7 @@ import { WrappedHomeCard } from '../components/WrappedEntry.jsx'
 import RecoveryHint from '../components/RecoveryHint.jsx'
 import { ChallengesCard } from '../components/Challenges.jsx'
 import { isOn } from '../lib/modules.js'
+import { isAthlete } from '../lib/team.js'
 
 // Home = what to do now + a quick glance. Deep charts & history live in Stats.
 export default function Home() {
@@ -215,7 +216,12 @@ export default function Home() {
       </div>
     )}
 
-    {!S.routines.length && !S.active && (
+    {!S.routines.length && !S.active && isAthlete(user) && (
+      <div className="card">
+        <CardHead icon="calendar" title={t('Welcome!')} sub={t('Your coach has not planned anything for you yet.')} />
+      </div>
+    )}
+    {!S.routines.length && !S.active && !isAthlete(user) && (
       <div className="card">
         <CardHead icon="calendar" title={t('Welcome!')} sub={t('Set up your weekly routine to get going, or grab a ready-made starter plan.')} />
         <Button variant="primary" icon="clipboard" onClick={starterPlanSheet}>{t('Load starter plan')}</Button>

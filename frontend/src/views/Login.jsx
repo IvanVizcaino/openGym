@@ -12,13 +12,18 @@ import { askAddDeviceData } from '../sheets.jsx'
 import { passwordOn, PasswordRegisterForm, openPasswordSignIn } from '../components/PasswordAuth.jsx'
 import { openDeviceLinkRedeem } from '../components/Passkeys.jsx'
 import { openLostAccess } from '../components/LostAccess.jsx'
+import { siteOf } from '../lib/site.js'
+import { pendingInvite, clearInvite } from '../lib/invite-link.js'
 
-function RegisterSheet({ close }) {
+function RegisterSheet({ close, invite }) {
   const { setUser, pushState, pullState, loadConfig } = useStore()
   const config = useStore(s => s.config)
   const [name, setName] = useState('')
-  const [code, setCode] = useState('')
+  const [code, setCode] = useState(invite || '')
   const inviteOnly = !!config?.invite_only
+  // Arrived with an invite link: the code is filled in and only named, never typed.
+  const askCode = inviteOnly && !invite
+  const done = () => { clearInvite(); close() }
   // A password is offered only where the instance allows it (#118), and is the only choice in a
   // browser that cannot make a passkey. Where both work, the passkey stays the first one.
   const pwOn = passwordOn(config)
@@ -34,7 +39,7 @@ function RegisterSheet({ close }) {
     if (inviteOnly && !code.trim()) { useUI.getState().toast(t('An invite code is required')); return }
     try {
       const u = await passkeyRegister(n, code.trim())
-      setUser(u); close()
+      setUser(u); done()
       if (hasData(useStore.getState().S)) { await pushState(); useUI.getState().toast(t('Profile created, and this device’s data moved into it')) }
       else { await pullState(); useUI.getState().toast(t('Welcome, {0}', u.name)) }
     } catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') useUI.getState().toast(passkeyError(e, t('Registration failed'))) }
@@ -48,14 +53,16 @@ function RegisterSheet({ close }) {
     <h3>{t('Create your profile')}</h3>
     {choose}
     <div className="muted small" style={{ marginBottom: 14 }}>{t('Pick a name and a password. You sign in with both.')}</div>
-    <PasswordRegisterForm close={close} inviteOnly={inviteOnly} name={name} setName={setName} code={code} setCode={setCode} />
+    {invite && <div className="dim small" style={{ marginBottom: 10 }}>{t('Invitation {0}', invite)}</div>}
+    <PasswordRegisterForm close={done} inviteOnly={askCode} name={name} setName={setName} code={code} setCode={setCode} />
   </>
   return <>
     <h3>{t('Create your profile')}</h3>
     {choose}
     <div className="muted small" style={{ marginBottom: 14 }}>{t('Pick a name, then confirm with {0}. The passkey lives on your device, so no password needed.', bio())}</div>
     <input ref={ref} className="input" placeholder={t('Your name')} maxLength={40} value={name} onChange={e => setName(e.target.value)} />
-    {inviteOnly && <>
+    {invite && <div className="dim small" style={{ marginTop: 10 }}>{t('Invitation {0}', invite)}</div>}
+    {askCode && <>
       <div style={{ height: 10 }} />
       <input className="input" placeholder={t('Invite code')} maxLength={40} value={code}
         onChange={e => setCode(e.target.value.toUpperCase())} style={{ letterSpacing: '.14em', fontWeight: 600, textAlign: 'center' }} />
@@ -71,14 +78,24 @@ export default function Login() {
   const config = useStore(s => s.config)
   const canGuest = guestAllowed(config)
   const pwOn = passwordOn(config)
-  const register = () => useUI.getState().openSheet(close => <RegisterSheet close={close} />)
+  // A profile is made only through an invite link (lib/invite-link.js), whatever the instance says
+  // about `invite_only`: without one there is nothing to offer but signing in. The one exception
+  // is an instance with no profiles yet (`first_profile`), whose first profile becomes its owner.
+  // Until the config is in, nothing is offered.
+  const [invite] = useState(() => pendingInvite())
+  const canRegister = !!invite || config?.first_profile === true
+  const register = () => useUI.getState().openSheet(close => <RegisterSheet close={close} invite={invite} />)
+  useEffect(() => { if (invite) register() }, [])
   const signIn = async () => {
     try { const u = await passkeyLogin(); setUser(u, { adopt: true }); await adoptProfile(askAddDeviceData); useUI.getState().toast(t('Welcome back, {0}', u.name)) }
     catch (e) { if (e.name !== 'NotAllowedError' && e.name !== 'AbortError') useUI.getState().toast(passkeyError(e, t('Sign-in failed'))) }
   }
+  // The instance's own name and logo when an admin set them (Admin → Site).
+  const site = siteOf(config)
   const head = <>
-    <div style={{ fontSize: 54, display: 'flex', justifyContent: 'center', color: 'var(--acc-ink)' }}><Icon name="dumbbell" /></div>
-    <h1 className="t-large" style={{ fontWeight: 700, margin: '10px 0 4px' }}>openGym</h1>
+    <div style={{ fontSize: 54, display: 'flex', justifyContent: 'center', color: 'var(--acc-ink)' }}>
+      {site.logo ? <img src={site.logo} alt="" style={{ width: 84, height: 84, objectFit: 'contain', borderRadius: 20 }} /> : <Icon name="dumbbell" />}</div>
+    <h1 className="t-large" style={{ fontWeight: 700, margin: '10px 0 4px' }}>{site.name}</h1>
   </>
   const wrap = { display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: '78vh', textAlign: 'center' }
 
@@ -100,12 +117,12 @@ export default function Login() {
   return (
     <div className="narrow" style={wrap}>
       {head}
-      <div className="muted" style={{ marginBottom: 34 }}>{t('Your workouts. Your weights. Your profile.')}</div>
+      <div className="muted" style={{ marginBottom: 34 }}>{invite ? t('You have an invitation. Create your profile to join.') : t('Your workouts. Your weights. Your profile.')}</div>
       {webauthnOK() ? <>
         <Button variant="primary" icon="fingerprint" onClick={signIn}>{t('Sign in with passkey')}</Button>
         <div style={{ height: 10 }} />
         {pwOn && <><Button icon="key" onClick={() => openPasswordSignIn()}>{t('Sign in with password')}</Button><div style={{ height: 10 }} /></>}
-        <Button icon="plusCircle" onClick={register}>{t('Create new profile')}</Button>
+        {canRegister && <Button icon="plusCircle" onClick={register}>{t('Create new profile')}</Button>}
         {/* Already signed in on another device: a code from there gives this one a passkey of
             its own (#95), instead of a new, empty profile. */}
         <div style={{ height: 10 }} />
@@ -119,7 +136,7 @@ export default function Login() {
         <div className="card small muted" style={{ textAlign: 'start', marginBottom: 14 }}>{t("This browser doesn't support passkeys. Sign in with your name and password instead.")}</div>
         <Button variant="primary" icon="key" onClick={() => openPasswordSignIn()}>{t('Sign in with password')}</Button>
         <div style={{ height: 10 }} />
-        <Button icon="plusCircle" onClick={register}>{t('Create new profile')}</Button>
+        {canRegister && <Button icon="plusCircle" onClick={register}>{t('Create new profile')}</Button>}
         <Button variant="ghost" className="dim" onClick={openLostAccess}>{t('Lost access?')}</Button>
         {canGuest && <div style={{ height: 10 }} />}
       </> : <div className="card small muted" style={{ textAlign: 'start' }}>{canGuest

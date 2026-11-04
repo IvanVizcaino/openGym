@@ -43,6 +43,10 @@ import { createIntegrations } from './integrations/index.js';
 import { integrationRoutes } from './integrations/routes.js';
 import { excusedOn, nudgeFor, nudgeWindowOpen, toneOf } from './nudge.js';
 import { wrappedPushYear, wrappedSummary, wrappedPushOwed, wrappedPush } from './wrapped.js';
+import {
+  ROLES, roleOf as teamRoleOf, lockPlan, planOf, assignRoutines, removeRoutine, setWeek, athleteRow,
+  parseLogo, logoMime, cleanSiteName
+} from './team.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -53,7 +57,10 @@ const RP_NAME = process.env.RP_NAME || 'openGym';
 // INVITE_ONLY gates new signups behind a code the admin generates. Off by default, so a fresh
 // self-hosted instance stays open.
 const ADMIN_UIDS = (process.env.ADMIN_UIDS || '').split(',').map(s => s.trim()).filter(Boolean);
-const INVITE_ONLY = /^(1|true|yes|on)$/i.test(process.env.INVITE_ONLY || '');
+// This fork is a coached gym: nobody signs up without an invite unless the instance says
+// INVITE_ONLY=0. The very first profile needs no code and becomes the owner, who invites the
+// coaches (inviteNeeded, FIRST_USER_ADMIN below).
+const INVITE_ONLY = !/^(0|false|no|off)$/i.test(process.env.INVITE_ONLY || '');
 // The first profile made on an instance with no profiles at all becomes its admin (#328), so a
 // fresh install has someone who can open the admin dashboard without editing ADMIN_UIDS and
 // restarting. Stored on the user record (user.admin), which isAdmin already honours. It is
@@ -61,7 +68,9 @@ const INVITE_ONLY = /^(1|true|yes|on)$/i.test(process.env.INVITE_ONLY || '');
 // nothing on upgrade. Default OFF: an existing instance with no profiles yet (guest-only, or phones
 // kept local) would otherwise hand admin to whoever signs up first after the upgrade.
 // FIRST_USER_ADMIN=1 turns it on for a fresh install.
-const FIRST_USER_ADMIN = /^(1|true|yes|on)$/i.test(process.env.FIRST_USER_ADMIN || '');
+// On unless FIRST_USER_ADMIN=0: with signup behind invites, an empty instance has nobody else who
+// could make the first code.
+const FIRST_USER_ADMIN = !/^(0|false|no|off)$/i.test(process.env.FIRST_USER_ADMIN || '');
 // Checked synchronously right before db.users.push, with no await in between, so two
 // registrations racing each other cannot both see an empty instance.
 function claimFirstAdmin(req, user) {
@@ -74,7 +83,8 @@ function claimFirstAdmin(req, user) {
 // server — but on an instance meant for a known set of people, an entrance nobody can walk back
 // out of is still the wrong front door (#42). Default ON, so existing instances are unchanged;
 // the polarity is inverted from INVITE_ONLY because the safe default here is the permissive one.
-const ALLOW_GUEST = !/^(0|false|no|off)$/i.test(process.env.ALLOW_GUEST || '');
+// Off unless ALLOW_GUEST=1 in this fork: a guest has no coach and no plan.
+const ALLOW_GUEST = /^(1|true|yes|on)$/i.test(process.env.ALLOW_GUEST || '');
 // Name-and-password sign-in next to passkeys (#118). Off by default: it adds a second way into
 // every account that opts in, so an instance has to ask for it. While it is off every password
 // route answers 404 and the app shows none of it; hashes already stored stay where they are.
@@ -159,6 +169,13 @@ db.subs = db.subs || [];
 db.invites = db.invites || [];
 db.deviceLinks = db.deviceLinks || [];   // unused one-time device links, hashed (device-link.js)
 const isAdmin = user => !!user && (user.admin === true || ADMIN_UIDS.includes(user.id));
+// Coach or athlete (team.js). Admins coach unless their role was set otherwise.
+const roleOf = user => teamRoleOf(user, isAdmin(user));
+const isCoach = user => !!user && roleOf(user) === 'coach';
+// Whether a signup needs an invite: on an invite-only instance, once it has its first profile.
+// Read again at the last moment of each signup, with no await before the push, like
+// claimFirstAdmin: of two signups racing on an empty instance only one goes through without a code.
+const inviteNeeded = () => INVITE_ONLY && !(FIRST_USER_ADMIN && db.users.length === 0);
 // One owner per instance, any number of admins. Admins run the place day to day (users, invites,
 // the Coach); the owner is the one admin the others cannot act on: only the owner appoints or
 // removes admins, deletes an admin's account, hands the role on, or clears the activity log.
@@ -187,6 +204,21 @@ function saveDb() {
   try { atomicWrite(dbFile + '.bak', text, 0o600); }
   catch (e) { console.error('db.json.bak could not be written', e.message); }
 }
+// The site's name and logo, set in Admin → Site (`{ name, logo: { ext, v } }`; the logo itself is
+// DATA_DIR/site-logo.<ext>). SITE_NAME is the name until an admin sets one.
+const siteFile = path.join(DATA, 'site.json');
+const site = (() => { try { const v = JSON.parse(fs.readFileSync(siteFile, 'utf8')); return v && typeof v === 'object' ? v : {}; } catch { return {}; } })();
+const SITE_NAME = cleanSiteName(process.env.SITE_NAME || '') || 'openGym';
+const saveSite = () => atomicWrite(siteFile, JSON.stringify(site, null, 2));
+const siteConfig = () => ({
+  name: cleanSiteName(site.name) || SITE_NAME,
+  logo: site.logo && logoMime(site.logo.ext) ? '/api/site/logo?v=' + site.logo.v : null
+});
+const LOGO_ERRORS = {
+  'logo-invalid': 'the logo has to be an image',
+  'logo-too-large': 'the logo can be at most 256 KB',
+  'logo-type': 'the logo has to be a PNG, JPEG or WebP image'
+};
 // Flushed before and after the rename (durable.js): a host reset must not bring back the file
 // the client was told had been replaced.
 function atomicWrite(file, content, mode) { durableWrite(file, content, mode); }
@@ -641,6 +673,32 @@ function requireAdmin(req, res) {
   // logging those would bury the events an operator actually wants to see.
   if (!isAdmin(user)) { audit(req, 'admin.denied', { ok: false, user }); json(res, 403, { error: 'forbidden' }); return null; }
   return user;
+}
+// Guard for /api/team/*: a signed-in coach.
+function requireCoach(req, res) {
+  const user = readSession(req);
+  if (!user) { json(res, 401, { error: 'not signed in' }); return null; }
+  if (!isCoach(user)) { json(res, 403, { error: 'only a coach can do this' }); return null; }
+  return user;
+}
+// A profile a coach may plan for: an athlete on this instance.
+const athleteOf = id => db.users.find(u => u.id === id && !isCoach(u)) || null;
+// A coach's change to an athlete's document, written the way PUT /api/data writes one: the next
+// revision and a new write id, so every device of the athlete sees the revision move and merges
+// the coach's stamped changes in. Returns an HTTP status on failure, nothing on success.
+function changeState(uid, mutate) {
+  const cur = readStateStrict(uid);
+  if (cur === UNREADABLE) { console.error('state file unreadable for', uid); return 503; }
+  const S = cur ? JSON.parse(JSON.stringify(cur)) : {};
+  mutate(S);
+  const rev = cur?._rev || 0;
+  S._rev = rev + 1;
+  S._wids = [...(Array.isArray(cur?._wids) ? cur._wids : []), ...(cur?._wid ? [cur._wid] : [])]
+    .filter(x => typeof x === 'string').slice(-WID_KEEP);
+  S._wid = crypto.randomBytes(8).toString('hex');
+  atomicWrite(stateFile(uid), JSON.stringify(S));
+  stateCache.delete(uid);
+  return null;
 }
 function requireOwner(req, res) {
   const user = requireAdmin(req, res); if (!user) return null;
@@ -1191,7 +1249,9 @@ function loginTarget(body) {
 }
 const acctKey = u => 'acct:' + u.id;
 const passkeyCount = u => db.creds.filter(c => c.userId === u.id).length;
-const publicUser = u => ({ id: u.id, name: u.name, admin: isAdmin(u), ...(isOwner(u) ? { owner: true } : {}) });
+const publicUser = u => ({ id: u.id, name: u.name, admin: isAdmin(u), role: roleOf(u), ...(isOwner(u) ? { owner: true } : {}) });
+// The role an invite hands out: a coach's only by an admin's invite (POST /api/admin/invites/new).
+const inviteRole = inv => (inv.role === 'coach' ? 'coach' : 'athlete');
 const POLICY_ERRORS = {
   'too-short': `the password needs at least ${MIN_LENGTH} characters`,
   'too-long': `the password can have at most ${MAX_LENGTH} characters`,
@@ -1405,8 +1465,8 @@ const passwordRoutes = {
     if (!name) return json(res, 400, { error: 'name required', code: 'missing' });
     const code = text(body.code).trim().toUpperCase();
     const invite = () => db.invites.find(i => i.code === code && !i.usedBy && !i.revoked);
-    if (INVITE_ONLY && addressPaused(req, res, 'signup')) return;
-    if (INVITE_ONLY && !invite()) {
+    if (inviteNeeded() && addressPaused(req, res, 'signup')) return;
+    if (inviteNeeded() && !invite()) {
       audit(req, 'auth.register.denied', { ok: false, name, msg: 'invite-rejected' });
       strikeAddress(req, 'signup');
       return json(res, 403, { error: 'a valid invite code is required', code: 'invite' });
@@ -1436,7 +1496,7 @@ const passwordRoutes = {
     if (email && addressPaused(req, res, 'email')) return;
     const h = await hashPassword(body.password);
     let inv = null;
-    if (INVITE_ONLY) {
+    if (inviteNeeded()) {
       inv = invite();
       if (!inv) {
         audit(req, 'auth.register.fail', { ok: false, name, msg: 'invite-invalid' });
@@ -1452,7 +1512,7 @@ const passwordRoutes = {
     if (email && emailTaken(email)) return emailRefused();
     const created = new Date().toISOString();
     const user = { id: crypto.randomBytes(12).toString('base64url'), name, created, pw: { h, set: created }, ...(email ? { email } : {}) };
-    if (inv) { user.invitedBy = inv.code; inv.usedBy = user.id; inv.usedAt = created; }
+    if (inv) { user.invitedBy = inv.code; inv.usedBy = user.id; inv.usedAt = created; user.role = inviteRole(inv); }
     claimFirstAdmin(req, user);
     db.users.push(user);
     saveDb();
@@ -2104,7 +2164,12 @@ const routes = {
     // were not signed in when you asked", and would re-ask on every sign-in on every instance
     // that has no Coach. The key's absence is that answer.
     json(res, 200, {
-      invite_only: INVITE_ONLY, allow_guest: ALLOW_GUEST,
+      invite_only: inviteNeeded(), allow_guest: ALLOW_GUEST,
+      // An instance with no profiles yet: the sign-in screen offers its first profile without an
+      // invite link (frontend lib/invite-link.js). Absent once anyone has signed up.
+      ...(db.users.length === 0 ? { first_profile: true } : {}),
+      // The name and logo the sign-in screen and the header show (Admin → Site).
+      site: siteConfig(),
       // Only when on, so an instance without passwords answers exactly as it did before (#118).
       ...(PASSWORD_LOGIN ? { password_login: true } : {}),
       // Public: the sign-in screen is the first thing that reads it.
@@ -2139,7 +2204,7 @@ const routes = {
     const name = text(body.name).trim().slice(0, 40);
     if (!name) return json(res, 400, { error: 'name required' });
     const code = text(body.code).trim().toUpperCase();
-    if (INVITE_ONLY && !db.invites.some(i => i.code === code && !i.usedBy && !i.revoked)) {
+    if (inviteNeeded() && !db.invites.some(i => i.code === code && !i.usedBy && !i.revoked)) {
       // The rejected code itself is never recorded — a near-miss guess in the log is a liability.
       audit(req, 'auth.register.denied', { ok: false, name, msg: 'invite-rejected' });
       return json(res, 403, { error: 'a valid invite code is required', code: 'invite' });
@@ -2188,7 +2253,7 @@ const routes = {
     }
     // Re-check the invite at the last moment (it may have been used/revoked since options), then burn it.
     let invite = null;
-    if (INVITE_ONLY) {
+    if (inviteNeeded()) {
       invite = db.invites.find(i => i.code === c.code && !i.usedBy && !i.revoked);
       if (!invite) {
         audit(req, 'auth.register.fail', { ok: false, name: c.name, msg: 'invite-invalid' });
@@ -2196,7 +2261,7 @@ const routes = {
       }
     }
     const user = { id: c.uid, name: c.name, created: new Date().toISOString() };
-    if (invite) { user.invitedBy = invite.code; invite.usedBy = user.id; invite.usedAt = user.created; }
+    if (invite) { user.invitedBy = invite.code; invite.usedBy = user.id; invite.usedAt = user.created; user.role = inviteRole(invite); }
     claimFirstAdmin(req, user);
     db.users.push(user);
     db.creds.push({
@@ -2574,6 +2639,9 @@ const routes = {
       return json(res, 409, { error: 'conflict', rev: curRev, state: forClient(cur) });
     }
     delete body.state.active;              // in-progress workouts stay device-local
+    // An athlete trains the plan their coach set and never changes it: the stored plan and its
+    // stamps go back in before anything below compares the two copies (team.js lockPlan).
+    const planKept = !isCoach(user) && lockPlan(cur, body.state);
     // "Reset everything" stamps the profile (`resetAt`, with `resetIds`: what it wiped). The stamp
     // only moves forward: a write without it, or with an older one — a client from before it, a
     // backup restored over the profile — keeps the stored stamp. Otherwise every device that saw
@@ -2598,7 +2666,7 @@ const routes = {
     // something it left out or set back (sync-stamps.js), the document stored is not that one: it
     // goes in one revision further, so the writer's next check of the revision (every half minute)
     // finds it moved and reads it, and its next push over the one it was told is a conflict to merge.
-    if (report.changed) body.state._rev = curRev + 2;
+    if (report.changed || planKept) body.state._rev = curRev + 2;
     body.state._wids = [...(Array.isArray(cur?._wids) ? cur._wids : []), ...(cur?._wid ? [cur._wid] : [])]
       .filter(x => typeof x === 'string').slice(-WID_KEEP);
     body.state._wid = crypto.randomBytes(8).toString('hex');
@@ -2766,7 +2834,7 @@ const routes = {
       const last = workouts[workouts.length - 1];
       return {
         id: u.id, name: u.name, created: u.created || null,
-        disabled: !!u.disabled, admin: isAdmin(u), owner: isOwner(u), invitedBy: u.invitedBy || null,
+        disabled: !!u.disabled, admin: isAdmin(u), owner: isOwner(u), role: roleOf(u), invitedBy: u.invitedBy || null,
         workouts: workouts.length,
         lastWorkout: last ? last.d : null,
         lastSync: lastSyncOf(u, S),
@@ -2777,7 +2845,7 @@ const routes = {
         ...(PASSWORD_LOGIN ? { password: hasPassword(u), email: u.email || null } : {})
       };
     });
-    json(res, 200, { users, invite_only: INVITE_ONLY, ...(PASSWORD_LOGIN ? { password_login: true } : {}), now: Date.now() });
+    json(res, 200, { users, invite_only: inviteNeeded(), ...(PASSWORD_LOGIN ? { password_login: true } : {}), now: Date.now() });
   },
 
   // Drill-down: full workout history + body-weight log for one user.
@@ -2789,7 +2857,7 @@ const routes = {
     const S = readState(u.id) || {};
     json(res, 200, {
       user: {
-        id: u.id, name: u.name, created: u.created || null, disabled: !!u.disabled, admin: isAdmin(u), owner: isOwner(u), invitedBy: u.invitedBy || null,
+        id: u.id, name: u.name, created: u.created || null, disabled: !!u.disabled, admin: isAdmin(u), owner: isOwner(u), role: roleOf(u), invitedBy: u.invitedBy || null,
         // Only on an instance with password sign-in: whether they have one, and until when an
         // unused reset code is good.
         ...(PASSWORD_LOGIN ? { password: hasPassword(u), email: u.email || null, resetUntil: u.pwReset?.exp > Date.now() ? u.pwReset.exp : null } : {}),
@@ -2895,13 +2963,74 @@ const routes = {
     json(res, 200, { ok: true, id: u.id });
   },
 
+  // Coach or athlete. Any admin, for anyone but themselves (an admin who made themselves an
+  // athlete would lose the Athletes screen they did it from).
+  'POST /api/admin/user/team-role': async (req, res) => {
+    const admin = requireAdmin(req, res); if (!admin) return;
+    const body = await readBody(req);
+    const u = db.users.find(x => x.id === body.id);
+    if (!u) return json(res, 404, { error: 'no such user' });
+    if (!ROLES.includes(body.role)) return json(res, 400, { error: 'role must be coach or athlete' });
+    if (u.id === admin.id) return json(res, 400, { error: 'you cannot change your own role' });
+    u.role = body.role;
+    saveDb();
+    audit(req, 'admin.team-role', { user: admin, target: u, msg: body.role });
+    json(res, 200, { ok: true, id: u.id, role: roleOf(u) });
+  },
+
+  // The site's name and logo (Admin → Site). The logo comes as a data URL, raster only (team.js).
+  'PUT /api/admin/site': async (req, res) => {
+    const admin = requireAdmin(req, res); if (!admin) return;
+    const body = await readBody(req);
+    if (typeof body.name !== 'string') return json(res, 400, { error: 'name required' });
+    site.name = cleanSiteName(body.name);
+    saveSite();
+    audit(req, 'admin.site', { user: admin, msg: site.name || '(default)' });
+    json(res, 200, { site: siteConfig() });
+  },
+  'PUT /api/admin/site/logo': async (req, res) => {
+    const admin = requireAdmin(req, res); if (!admin) return;
+    const body = await readBody(req);
+    const logo = parseLogo(body.data);
+    if (logo.error) return json(res, 400, { error: LOGO_ERRORS[logo.error], code: logo.error });
+    const old = site.logo;
+    atomicWrite(path.join(DATA, 'site-logo.' + logo.ext), logo.bytes);
+    site.logo = { ext: logo.ext, v: crypto.randomBytes(4).toString('hex') };
+    saveSite();
+    if (old && old.ext !== logo.ext) fs.rm(path.join(DATA, 'site-logo.' + old.ext), { force: true }, () => {});
+    audit(req, 'admin.site.logo', { user: admin });
+    json(res, 200, { site: siteConfig() });
+  },
+  'DELETE /api/admin/site/logo': async (req, res) => {
+    const admin = requireAdmin(req, res); if (!admin) return;
+    if (site.logo) fs.rm(path.join(DATA, 'site-logo.' + site.logo.ext), { force: true }, () => {});
+    delete site.logo;
+    saveSite();
+    audit(req, 'admin.site.logo.remove', { user: admin });
+    json(res, 200, { site: siteConfig() });
+  },
+  // Public: the sign-in screen shows it. Its address changes with every upload (`?v=`), so it
+  // can be cached for good.
+  'GET /api/site/logo': async (req, res) => {
+    const mime = site.logo && logoMime(site.logo.ext);
+    let bytes;
+    try { bytes = mime && fs.readFileSync(path.join(DATA, 'site-logo.' + site.logo.ext)); } catch { bytes = null; }
+    if (!bytes) return json(res, 404, { error: 'no logo' });
+    res.writeHead(200, {
+      'Content-Type': mime, 'Content-Length': String(bytes.length),
+      'Cache-Control': 'public, max-age=31536000, immutable',
+      'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; sandbox"
+    });
+    res.end(bytes);
+  },
+
   'GET /api/admin/invites': async (req, res) => {
     if (!requireAdmin(req, res)) return;
     // resolve usedBy uid → name for display
     const invites = db.invites.map(i => ({
       ...i, usedByName: i.usedBy ? (db.users.find(u => u.id === i.usedBy) || {}).name || null : null
     }));
-    json(res, 200, { invites, invite_only: INVITE_ONLY });
+    json(res, 200, { invites, invite_only: inviteNeeded() });
   },
 
   'POST /api/admin/invites/new': async (req, res) => {
@@ -2913,10 +3042,11 @@ const routes = {
     // code is good, so the code itself has to be the thing that isn't worth guessing. Codes already
     // in db.json keep working — validation is an exact string compare, never a length or format check.
     do { code = crypto.randomBytes(8).toString('hex').toUpperCase(); } while (db.invites.some(i => i.code === code));
-    const invite = { code, note: text(body.note).slice(0, 60), createdBy: admin.id, created: new Date().toISOString() };
+    const role = body.role === 'coach' ? 'coach' : 'athlete';
+    const invite = { code, note: text(body.note).slice(0, 60), role, createdBy: admin.id, created: new Date().toISOString() };
     db.invites.push(invite);
     saveDb();
-    audit(req, 'admin.invite.create', { user: admin, msg: code });
+    audit(req, 'admin.invite.create', { user: admin, msg: code + ' · ' + role });
     json(res, 200, { invite });
   },
 
@@ -2966,6 +3096,113 @@ const routes = {
     try { fs.unlinkSync(auditFile); } catch { /* nothing logged yet */ }
     auditCount = 0;
     audit(req, 'admin.audit.clear', { user: admin });
+    json(res, 200, { ok: true });
+  },
+
+  /* ---------- coaches and athletes (team.js) ---------- */
+  'GET /api/team/athletes': async (req, res) => {
+    if (!requireCoach(req, res)) return;
+    const athletes = db.users.filter(u => !isCoach(u)).map(u => athleteRow(u, readStateCached(u.id) || {}));
+    json(res, 200, { athletes });
+  },
+  // One athlete: the plan the coach edits, and what the stats are drawn from. A workout's photos
+  // and videos stay the athlete's own, as in the admin drill-down.
+  'GET /api/team/athlete': async (req, res) => {
+    if (!requireCoach(req, res)) return;
+    const u = athleteOf(new URL(req.url, 'http://x').searchParams.get('id'));
+    if (!u) return json(res, 404, { error: 'no such athlete' });
+    const S = readStateStrict(u.id);
+    if (S === UNREADABLE) return json(res, 503, { error: 'state unreadable' });
+    json(res, 200, {
+      athlete: athleteRow(u, S || {}),
+      plan: planOf(S || {}),
+      unit: S?.unit || 'kg',
+      workouts: records(S?.workouts).map(({ media, ...w }) => w),
+      bodyweight: records(S?.bodyweight),
+      measurements: records(S?.measurements),
+      exWeights: S?.exWeights && typeof S.exWeights === 'object' ? S.exWeights : {},
+      customEx: records(S?.customEx).map(({ media, ...x }) => x)
+    });
+  },
+  // Copies of the coach's own routines into the plans of the athletes named, each copy on the
+  // weekdays given for it (`days: { [routineId]: ['1', '4'] }`, getDay() numbers).
+  'POST /api/team/assign': async (req, res) => {
+    const coach = requireCoach(req, res); if (!coach) return;
+    const body = await readBody(req);
+    const ids = Array.isArray(body.routines) ? body.routines.map(String) : [];
+    const own = records(readState(coach.id)?.routines);
+    const picked = ids.map(id => own.find(r => String(r.id) === id)).filter(Boolean);
+    if (!picked.length) return json(res, 400, { error: 'pick at least one of your routines' });
+    // Custom exercises the routines use go along, or the athlete's app would show them unnamed.
+    const usedEx = new Set(picked.flatMap(r => records(r.ex).map(e => String(e.id))));
+    const customEx = records(readState(coach.id)?.customEx).filter(x => usedEx.has(String(x.id)));
+    const athletes = (Array.isArray(body.athletes) ? body.athletes : []).map(athleteOf);
+    if (!athletes.length || athletes.some(a => !a)) return json(res, 400, { error: 'pick at least one athlete' });
+    const days = body.days && typeof body.days === 'object' && !Array.isArray(body.days) ? body.days : {};
+    const out = {};
+    for (const a of athletes) {
+      const r = changeState(a.id, S => {
+        out[a.id] = assignRoutines(S, picked, coach.id, { days });
+        S.customEx = records(S.customEx);
+        for (const x of customEx) if (!S.customEx.some(y => String(y.id) === String(x.id))) S.customEx.push({ ...x, _ts: Date.now() });
+      });
+      if (r) return json(res, r, { error: 'state unreadable' });
+    }
+    audit(req, 'team.assign', { user: coach, msg: `${picked.length} → ${athletes.length}` });
+    json(res, 200, { ok: true, assigned: out });
+  },
+  'POST /api/team/unassign': async (req, res) => {
+    const coach = requireCoach(req, res); if (!coach) return;
+    const body = await readBody(req);
+    const a = athleteOf(body.athlete);
+    if (!a) return json(res, 404, { error: 'no such athlete' });
+    let found = false;
+    const r = changeState(a.id, S => (found = removeRoutine(S, text(body.routine))));
+    if (r) return json(res, r, { error: 'state unreadable' });
+    if (!found) return json(res, 404, { error: 'no such routine' });
+    audit(req, 'team.unassign', { user: coach, target: a });
+    json(res, 200, { ok: true });
+  },
+  'PUT /api/team/week': async (req, res) => {
+    const coach = requireCoach(req, res); if (!coach) return;
+    const body = await readBody(req);
+    const a = athleteOf(body.athlete);
+    if (!a) return json(res, 404, { error: 'no such athlete' });
+    if (!body.week || typeof body.week !== 'object' || Array.isArray(body.week)) return json(res, 400, { error: 'week required' });
+    let plan;
+    const r = changeState(a.id, S => { setWeek(S, body.week); plan = planOf(S); });
+    if (r) return json(res, r, { error: 'state unreadable' });
+    audit(req, 'team.week', { user: coach, target: a });
+    json(res, 200, { ok: true, plan });
+  },
+  // A coach's invites for athletes. The admin's list (GET /api/admin/invites) holds them too.
+  'GET /api/team/invites': async (req, res) => {
+    const coach = requireCoach(req, res); if (!coach) return;
+    const invites = db.invites.filter(i => i.createdBy === coach.id).map(i => ({
+      ...i, usedByName: i.usedBy ? (db.users.find(u => u.id === i.usedBy) || {}).name || null : null
+    }));
+    json(res, 200, { invites, invite_only: inviteNeeded() });
+  },
+  'POST /api/team/invites/new': async (req, res) => {
+    const coach = requireCoach(req, res); if (!coach) return;
+    const body = await readBody(req);
+    let code;
+    do { code = crypto.randomBytes(8).toString('hex').toUpperCase(); } while (db.invites.some(i => i.code === code));
+    const invite = { code, note: text(body.note).slice(0, 60), role: 'athlete', createdBy: coach.id, created: new Date().toISOString() };
+    db.invites.push(invite);
+    saveDb();
+    audit(req, 'team.invite.create', { user: coach, msg: code });
+    json(res, 200, { invite });
+  },
+  'POST /api/team/invites/revoke': async (req, res) => {
+    const coach = requireCoach(req, res); if (!coach) return;
+    const body = await readBody(req);
+    const inv = db.invites.find(i => i.code === text(body.code).toUpperCase() && i.createdBy === coach.id);
+    if (!inv) return json(res, 404, { error: 'no such code' });
+    if (inv.usedBy) return json(res, 400, { error: 'already used, cannot revoke' });
+    db.invites = db.invites.filter(i => i.code !== inv.code);
+    saveDb();
+    audit(req, 'team.invite.revoke', { user: coach, msg: inv.code });
     json(res, 200, { ok: true });
   },
 
