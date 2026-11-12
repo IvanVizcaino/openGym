@@ -1366,6 +1366,11 @@ button.whdr-gym{color:var(--acc-ink);cursor:pointer}
 .pp-label-before{inset-inline-start:10px}
 .pp-label-after{inset-inline-end:10px}
 .wrow-media .icn{font-size:var(--fs-footnote)}
+/* Coach editing an athlete's assigned routine on top of their page (TeamRoutineEdit.jsx). */
+.team-r-edit{
+  position:absolute;inset:0;background:var(--bg);color:var(--label);overflow:auto;
+  padding:var(--sat) 0 var(--sab);animation:pop-fade .2s var(--ease);-webkit-overflow-scrolling:touch;
+}
 .mviewer{
   position:absolute;inset:0;background:#000;color:#fff;display:flex;flex-direction:column;
   padding:var(--sat) 0 var(--sab);animation:pop-fade .2s var(--ease);
@@ -3266,6 +3271,25 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .stats-list-h{margin-bottom:10px}
 .stats-links{margin-bottom:12px}
 .effort-card h4.sec{margin:16px 0 6px;padding:0}
+/* Coach-written diet (HTML editor + legacy Markdown via DietView). */
+.md{font-size:var(--fs-body);line-height:var(--lh-body);color:var(--label-1)}
+.md h2,.md-h1,.md-h2{margin:14px 0 6px;font-weight:600;letter-spacing:var(--ls-body)}
+.md h2,.md-h1{font-size:var(--fs-title3)}
+.md h3,.md-h2{font-size:var(--fs-body)}
+.md p,.md-p{margin:0 0 10px}
+.md ul,.md ol,.md-ul{margin:0 0 10px;padding-inline-start:1.2em}
+.md li,.md-ul li{margin:2px 0}
+.md a{color:var(--acc)}
+.rich-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:8px}
+.rich-ed{
+  padding:12px 14px;border:1px solid var(--sep);border-radius:var(--r-md,12px);
+  background:var(--fill-1,var(--bg-2));outline:none;line-height:var(--lh-body);
+  overflow:auto;max-height:55vh;
+}
+.rich-ed:focus{border-color:var(--acc)}
+.rich-ed:empty:before{
+  content:attr(data-placeholder);color:var(--label-3);pointer-events:none;
+}
 /* A phone under 360px: three cells of about 90px; the figure a step smaller so "-1.6 kg" stays on
    one line (it broke as "-1.6 / kg" at 320). */
 @media (max-width:360px){

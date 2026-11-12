@@ -159,8 +159,9 @@ describe('what nginx forwards to the API', () => {
   it('no block hands the API the target as it came in', () => {
     const passes = [...render('/gym').matchAll(/\bproxy_pass\s+([^;]+);/g)].map(m => m[1])
       .filter(to => to.startsWith('$api_upstream'))
-    expect(passes.length).toBe(2)
-    for (const to of passes) expect(to).toBe('$api_upstream$api_request_uri')
+    // /api/ and /api/media/ rewrite with $api_request_uri; /manifest.json is a fixed path.
+    expect(passes.filter(to => to === '$api_upstream$api_request_uri').length).toBe(2)
+    expect(passes).toContain('$api_upstream/api/site/manifest')
   })
 
   it('takes a passed-through prefix off, query and all', () => {

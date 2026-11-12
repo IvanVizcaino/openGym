@@ -62,6 +62,9 @@ services:
       # slash). Empty serves the app at the site root, which is what it has always done; a proxy
       # that strips the prefix needs nothing set (docs/SELF_HOSTING.md §5).
       - BASE_PATH=${BASE_PATH:-}
+      # Baked into index.html at start so link previews show this name (web/10-site-name.sh).
+      # Admin → Site still overrides the in-app title once JS loads.
+      - SITE_NAME=${SITE_NAME:-}
       # The largest photo or video upload nginx passes to the API. Keep it above
       # MEDIA_VIDEO_MAX_MB (40 by default), which the api service reads from .env.
       - MEDIA_UPLOAD_MAX=${MEDIA_UPLOAD_MAX:-48m}

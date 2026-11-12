@@ -2,7 +2,7 @@
    athlete's plan. Pure functions, no server. */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { roleOf, lockPlan, assignRoutines, removeRoutine, setWeek, planOf, athleteRow, parseLogo, cleanSiteName } from '../team.js';
+import { roleOf, lockPlan, assignRoutines, updateRoutine, removeRoutine, setWeek, setDiet, planOf, athleteRow, parseLogo, cleanSiteName } from '../team.js';
 
 const PNG = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex');
 
@@ -51,6 +51,25 @@ test('lockPlan: a first push from an athlete brings no plan with it', () => {
   assert.equal('week' in next, false);
 });
 
+test('lockPlan puts the coach diet back and setDiet stamps it', () => {
+  const cur = { diet: '# Breakfast\nOats', edited: { diet: 10 } };
+  const next = { diet: 'Hacked', edited: { diet: 99, theme: 1 }, theme: 'light' };
+  assert.equal(lockPlan(cur, next), true);
+  assert.equal(next.diet, '# Breakfast\nOats');
+  assert.equal(next.edited.diet, 10);
+  assert.equal(next.edited.theme, 1);
+  const S = {};
+  setDiet(S, '  Eggs  ', 50);
+  assert.equal(S.diet, '  Eggs  ');
+  assert.equal(S.edited.diet, 50);
+  assert.equal(planOf(S).diet, '  Eggs  ');
+  setDiet(S, '', 60);
+  assert.equal('diet' in S, false);
+  assert.equal(planOf(S).diet, '');
+  setDiet(S, '<p>ok</p><script>bad</script>', 70);
+  assert.equal(S.diet, '<p>ok</p>');
+});
+
 test('lockPlan: the queue is the athlete\'s only while a rotation runs', () => {
   const withRotation = { rotation: { id: 'rot' }, queue: { items: [1] } };
   const n1 = { queue: { items: [2] }, edited: { queue: 9 } };
@@ -94,6 +113,23 @@ test('assignRoutines: a copy removed before and assigned again is an add-back', 
   const { c1: c2 } = assignRoutines(S, [{ id: 'c1', ex: [] }], 'coach', { now: 3 });
   assert.notEqual(c2, c1);
   assert.equal(S.routines.length, 1);
+});
+
+test('updateRoutine edits the copy in place and keeps id and coach tag', () => {
+  const S = {};
+  const { c1 } = assignRoutines(S, [{ id: 'c1', name: 'Push', emoji: 'dumbbell', ex: [{ id: 'bench', sets: 3 }], prog: 'linear' }], 'coach', { now: 100 });
+  const prev = S.routines.find(r => r.id === c1);
+  const out = updateRoutine(S, c1, {
+    id: 'ignored', name: 'Push + arms', emoji: 'arm', prog: 'double',
+    ex: [{ id: 'bench', sets: 4 }, { id: 'curl', sets: 3 }], coach: { id: 'hacker' },
+  }, 200);
+  assert.equal(out.id, c1);
+  assert.equal(out.name, 'Push + arms');
+  assert.equal(out.prog, 'double');
+  assert.equal(out.ex.length, 2);
+  assert.deepEqual(out.coach, prev.coach);
+  assert.equal(out._ts, 200);
+  assert.equal(updateRoutine(S, 'nope', { id: 'nope', name: 'x' }, 201), null);
 });
 
 test('removeRoutine takes it off every day and records the removal', () => {

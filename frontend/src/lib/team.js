@@ -6,8 +6,13 @@ import { lockPlan, PLAN_FIELDS, WEEK_DAYS } from '../../../api/team-plan.js'
 
 export { PLAN_FIELDS, WEEK_DAYS }
 
-/** The signed-in profile's role; null signed out or on a server from before roles. */
-export const roleOf = user => (user && (user.role === 'coach' || user.role === 'athlete') ? user.role : null)
+/** The signed-in profile's role. Matches the server (api/team-plan.js): admins coach unless a
+ *  role was set; everybody else trains. null only when signed out. */
+export const roleOf = user => {
+  if (!user) return null
+  if (user.role === 'coach' || user.role === 'athlete') return user.role
+  return user.admin ? 'coach' : 'athlete'
+}
 export const isAthlete = user => roleOf(user) === 'athlete'
 export const isCoach = user => roleOf(user) === 'coach'
 

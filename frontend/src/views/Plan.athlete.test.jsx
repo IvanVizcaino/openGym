@@ -51,6 +51,7 @@ describe('Plan for an athlete', () => {
     expect(buttons()).not.toContain('Fixed Week')
     expect(buttons()).not.toContain('Plan options')
     expect(buttons()).not.toContain('Athletes')
+    expect(buttons()).toContain('Diet')
     // A tap on the day opens the routine to look at, never the day's planner.
     act(() => host.querySelector('.plan-day[aria-label="Monday"]').click())
     expect(mocks.nav).toEqual(['/plan/r/r1'])

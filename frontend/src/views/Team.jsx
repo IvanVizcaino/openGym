@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
-import { api, remoteAuth } from '../lib/api.js'
+import { api, apiBlob, remoteAuth } from '../lib/api.js'
 import { inviteLink } from '../lib/invite-link.js'
 import { t } from '../lib/i18n.js'
 import { DAYS, DAYN, weekOrder, weekStartOf, fmtDate, fmtDur, fmtNum, fmtVol, exCount, todayISO, exerciseNameText } from '../lib/format.js'
@@ -11,12 +11,18 @@ import { bestSetOf } from '../lib/onerm.js'
 import { exOr } from '../lib/exercises.js'
 import { glyphOf } from '../lib/glyphs.js'
 import { athleteStats, isCoach, toggleDay } from '../lib/team.js'
+import { siteOf } from '../lib/site.js'
+import { MEASUREMENT_FIELDS, toMeasurementDisplay, measurementUnit } from '../lib/measurements.js'
 import { tappable } from '../lib/use-sheet-keyboard.js'
 import { confirmSheet, menuSheet } from '../sheets.jsx'
 import Icon from '../components/Icon.jsx'
 import EmptyState from '../components/EmptyState.jsx'
 import LineChart from '../components/LineChart.jsx'
+import DietView from '../components/DietView.jsx'
+import RichText from '../components/RichText.jsx'
 import { Button, Segmented } from '../components/ui.jsx'
+import { looksLikeHtml, isEmptyHtml, sanitizeHtml } from '../lib/safe-html.js'
+import { mdHtml } from '../lib/md.js'
 
 // The coach's screen (api/team.js): every athlete, their plan and their training. The coach's own
 // routines (Plan) are the library: "Assign" puts copies of them into the plans of the athletes
@@ -29,8 +35,9 @@ const nameIn = d => id => d.customEx?.find(x => String(x.id) === String(id))?.na
 // comes with one (lib/invite-link.js). A paired phone's link points at its server.
 const linkOf = code => inviteLink(code, { server: remoteAuth()?.base })
 const copyLink = code => { navigator.clipboard?.writeText(linkOf(code)).catch(() => {}) }
-const shareLink = (code, toast) => {
-  if (navigator.share) navigator.share({ url: linkOf(code) }).catch(() => {})
+const shareLink = (code, toast, title) => {
+  const url = linkOf(code)
+  if (navigator.share) navigator.share({ title: title || 'openGym', url }).catch(() => {})
   else { copyLink(code); toast(t('Invite link copied. It works once.')) }
 }
 
@@ -81,6 +88,7 @@ const tn2 = n => t('{0} athletes', n)
 
 function InvitesCard() {
   const toast = useUI(s => s.toast)
+  const siteName = siteOf(useStore(s => s.config)).name
   const [invites, setInvites] = useState(null)
   const load = () => api('/api/team/invites').then(d => setInvites(d.invites || [])).catch(() => setInvites([]))
   useEffect(() => { load() }, [])
@@ -100,7 +108,7 @@ function InvitesCard() {
       <button className="plan-textbtn" style={{ fontFamily: 'ui-monospace,SFMono-Regular,Menlo,monospace', letterSpacing: '.06em' }}
         onClick={() => { copyLink(i.code); toast(t('Invite link copied. It works once.')) }} aria-label={t('Copy {0}', i.code)}>{i.code}</button>
       <div className="row" style={{ gap: 4 }}>
-      <button className="iconbtn" onClick={() => shareLink(i.code, toast)} aria-label={t('Share')}><Icon name="share" /></button>
+      <button className="iconbtn" onClick={() => shareLink(i.code, toast, siteName)} aria-label={t('Share')}><Icon name="share" /></button>
       <button className="iconbtn" style={{ color: 'var(--red)' }} onClick={() => revoke(i.code)} aria-label={t('Revoke')}><Icon name="trash" /></button>
       </div>
     </div>)}
@@ -164,11 +172,97 @@ export function TeamAthlete() {
       <Button size="sm" variant="tinted" icon="plus" onClick={assign}>{t('Assign')}</Button>
     </div>
     <Segmented className="plan-views" value={view} onChange={setView}
-      options={[{ value: 'plan', label: t('Plan') }, { value: 'stats', label: t('Stats') }, { value: 'history', label: t('History') }]} />
+      options={[
+        { value: 'plan', label: t('Plan') },
+        { value: 'body', label: t('Body') },
+        { value: 'stats', label: t('Stats') },
+        { value: 'history', label: t('History') },
+      ]} />
     {view === 'plan' ? <AthletePlan d={d} S={S} reload={load} />
-      : view === 'stats' ? <AthleteStats d={d} />
-        : <AthleteHistory d={d} />}
+      : view === 'body' ? <AthleteBody d={d} />
+        : view === 'stats' ? <AthleteStats d={d} />
+          : <AthleteHistory d={d} />}
   </div>
+}
+
+/** HTML for the editor: keep HTML diets, turn legacy Markdown into HTML once. */
+function dietEditorHtml(src) {
+  const s = String(src || '').trim()
+  if (!s) return ''
+  return looksLikeHtml(s) ? sanitizeHtml(s) : mdHtml(s)
+}
+
+function DietCard({ d, reload }) {
+  const openSheet = useUI(s => s.openSheet)
+  const diet = typeof d.plan?.diet === 'string' ? d.plan.diet : ''
+  const edit = () => openSheet(close => <DietEditSheet athlete={d.athlete.id} initial={diet} close={close} done={reload} />)
+  return <div className="card" style={{ marginTop: 12 }}>
+    <div className="row between">
+      <h2 style={{ margin: 0 }}>{t('Recommended diet')}</h2>
+      <Button size="sm" variant="primary" icon="note" onClick={edit}>{diet.trim() ? t('Edit diet') : t('Add')}</Button>
+    </div>
+    <div className="small dim" style={{ margin: '6px 0 8px' }}>{t('The athlete can only read this.')}</div>
+    {diet.trim() ? <DietView source={diet} /> : <div className="empty" style={{ padding: '12px 0' }}>{t('No diet yet')}</div>}
+  </div>
+}
+
+export function DietEditSheet({ athlete, athleteName, initial, close, done }) {
+  const toast = useUI(s => s.toast)
+  const [html, setHtml] = useState(() => dietEditorHtml(initial))
+  const [busy, setBusy] = useState(false)
+  const save = () => {
+    setBusy(true)
+    const diet = isEmptyHtml(html) ? '' : sanitizeHtml(html)
+    api('/api/team/diet', { method: 'PUT', body: JSON.stringify({ athlete, diet }) })
+      .then(() => { toast(t('Diet saved.')); done?.(); close() })
+      .catch(e => { setBusy(false); toast(e.message) })
+  }
+  return <>
+    <h3>{athleteName ? t('Diet for {0}', athleteName) : t('Edit diet')}</h3>
+    <div className="small dim" style={{ marginBottom: 8 }}>{t('The athlete can only read this.')}</div>
+    <RichText value={html} onChange={setHtml} placeholder={t('Breakfast, lunch, snacks…')} />
+    <Button variant="primary" disabled={busy} onClick={save} style={{ marginTop: 12 }}>{t('Save diet')}</Button>
+  </>
+}
+
+function PickAthleteDiet({ athletes, close }) {
+  const openSheet = useUI(s => s.openSheet)
+  const toast = useUI(s => s.toast)
+  const open = a => {
+    api('/api/team/athlete?id=' + encodeURIComponent(a.id))
+      .then(d => openSheet(c => <DietEditSheet athlete={a.id} athleteName={a.name} initial={d.plan?.diet || ''} close={c} />))
+      .catch(e => toast(e.message))
+    close()
+  }
+  return <>
+    <h3>{t('Whose diet?')}</h3>
+    <div className="small dim" style={{ marginBottom: 10 }}>{t('Pick an athlete. They will see this diet as read-only.')}</div>
+    <div className="list">{athletes.map(a => <div key={a.id} className="item" {...tappable(() => open(a))}>
+      <span className="lrow-i"><Icon name="person" /></span>
+      <div className="grow"><div className="tt">{a.name}</div></div>
+      <Icon name="chevronRight" className="chev" />
+    </div>)}</div>
+  </>
+}
+
+/** From Plan: set an athlete's diet without hunting through their page. */
+export function coachDietSheet() {
+  const openSheet = useUI.getState().openSheet
+  const toast = useUI.getState().toast
+  api('/api/team/athletes')
+    .then(d => {
+      const list = (d.athletes || []).filter(a => !a.disabled)
+      if (!list.length) {
+        toast(t('Invite an athlete first. Then you can set their diet from Plan → Diet.'))
+        return
+      }
+      if (list.length === 1) {
+        return api('/api/team/athlete?id=' + encodeURIComponent(list[0].id))
+          .then(full => openSheet(close => <DietEditSheet athlete={list[0].id} athleteName={list[0].name} initial={full.plan?.diet || ''} close={close} />))
+      }
+      openSheet(close => <PickAthleteDiet athletes={list} close={close} />)
+    })
+    .catch(e => toast(e.message))
 }
 
 function AthletePlan({ d, S, reload }) {
@@ -177,17 +271,32 @@ function AthletePlan({ d, S, reload }) {
   const order = weekOrder(weekStartOf(S))
   const todayDow = new Date().getDay()
   const byId = id => routines.find(r => String(r.id) === String(id))
+  const openRoutine = r => import('./TeamRoutineEdit.jsx').then(m => m.editAthleteRoutineSheet({
+    athleteId: d.athlete.id,
+    athleteName: d.athlete.name,
+    routine: r,
+    onDone: reload,
+  }))
   const saveWeek = next => api('/api/team/week', { method: 'PUT', body: JSON.stringify({ athlete: d.athlete.id, week: next }) })
     .then(reload).catch(e => toast(e.message))
-  const editDay = day => menuSheet({
-    title: t(DAYN[day]),
-    subtitle: t('Tap a routine to put it on this day or take it off.'),
-    items: routines.map(r => ({
-      icon: [].concat(week[day] || []).includes(String(r.id)) ? 'checkCircle' : glyphOf(r.emoji),
-      label: r.name, sub: exCount((r.ex || []).length),
-      onClick: () => saveWeek(toggleDay(week, day, r.id)),
-    })),
-  })
+  const editDay = day => {
+    const onDay = new Set([].concat(week[day] || []).map(String))
+    menuSheet({
+      title: t(DAYN[day]),
+      subtitle: t('Edit a routine, or tap one to put it on this day or take it off.'),
+      items: [
+        ...routines.filter(r => onDay.has(String(r.id))).map(r => ({
+          icon: 'pencil', label: t('Edit “{0}”', r.name), sub: exCount((r.ex || []).length),
+          onClick: () => openRoutine(r),
+        })),
+        ...routines.map(r => ({
+          icon: onDay.has(String(r.id)) ? 'checkCircle' : glyphOf(r.emoji),
+          label: r.name, sub: onDay.has(String(r.id)) ? t('On this day — tap to remove') : t('Off this day — tap to add'),
+          onClick: () => saveWeek(toggleDay(week, day, r.id)),
+        })),
+      ],
+    })
+  }
   const remove = r => confirmSheet({
     title: t('Take “{0}” out of their plan?', r.name),
     message: t('It comes off every day of their week. Their workouts stay.'),
@@ -195,27 +304,143 @@ function AthletePlan({ d, S, reload }) {
     onConfirm: () => api('/api/team/unassign', { method: 'POST', body: JSON.stringify({ athlete: d.athlete.id, routine: r.id }) })
       .then(reload).catch(e => toast(e.message)),
   })
-  if (!routines.length) return <EmptyState icon="clipboard" title={t('No plan yet.')} text={t('“Assign” puts copies of your routines into their plan.')} />
   return <>
-    <h4 className="sec">{t('Their week')}</h4>
-    <div className="list plan-week">{order.map(day => {
-      const rs = [].concat(week[day] || []).map(byId).filter(Boolean)
-      return <div key={day} className="item plan-day" aria-label={t(DAYN[day])} {...tappable(() => editDay(day))}>
-        <span className={'plan-day-n' + (day === todayDow ? ' today' : '')} aria-hidden="true">{t(DAYS[day])}</span>
-        <span className={'lrow-i' + (rs.length ? '' : ' rest')}><Icon name={rs.length ? glyphOf(rs[0].emoji) : 'moon'} /></span>
-        <div className="grow"><div className="tt">{rs.length ? rs.map(r => r.name).join(' + ') : t('Rest day')}</div>
-          <div className="ss">{rs.length ? exCount(rs.reduce((n, r) => n + (r.ex || []).length, 0)) : t('Tap to plan something')}</div></div>
-        <Icon name="chevronRight" className="chev" />
-      </div>
-    })}</div>
-    <h4 className="sec">{t('Their routines')}</h4>
-    <div className="list">{routines.map(r => <div key={r.id} className="item">
-      <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
-      <div className="grow"><div className="tt">{r.name}</div>
-        <div className="ss">{(r.ex || []).map(e => nameIn(d)(e.id)).join(', ') || exCount(0)}</div></div>
-      <button className="iconbtn" style={{ color: 'var(--red)' }} onClick={() => remove(r)} aria-label={t('Remove {0}', r.name)}><Icon name="minus" /></button>
-    </div>)}</div>
-    <p className="sect-f">{t('To change a routine, edit yours in Plan and assign it again.')}</p>
+    <DietCard d={d} reload={reload} />
+    {!routines.length
+      ? <EmptyState icon="clipboard" title={t('No plan yet.')} text={t('“Assign” puts copies of your routines into their plan.')} />
+      : <>
+        <h4 className="sec">{t('Their week')}</h4>
+        <div className="list plan-week">{order.map(day => {
+          const rs = [].concat(week[day] || []).map(byId).filter(Boolean)
+          return <div key={day} className="item plan-day" aria-label={t(DAYN[day])} {...tappable(() => editDay(day))}>
+            <span className={'plan-day-n' + (day === todayDow ? ' today' : '')} aria-hidden="true">{t(DAYS[day])}</span>
+            <span className={'lrow-i' + (rs.length ? '' : ' rest')}><Icon name={rs.length ? glyphOf(rs[0].emoji) : 'moon'} /></span>
+            <div className="grow"><div className="tt">{rs.length ? rs.map(r => r.name).join(' + ') : t('Rest day')}</div>
+              <div className="ss">{rs.length ? exCount(rs.reduce((n, r) => n + (r.ex || []).length, 0)) : t('Tap to plan something')}</div></div>
+            <Icon name="chevronRight" className="chev" />
+          </div>
+        })}</div>
+        <h4 className="sec">{t('Their routines')}</h4>
+        <div className="list">{routines.map(r => <div key={r.id} className="item tap-host">
+          <span className="lrow-i"><Icon name={glyphOf(r.emoji)} /></span>
+          <button type="button" className="grow item-open tap-main" onClick={() => openRoutine(r)}>
+            <span className="tt">{r.name}</span>
+            <span className="ss">{(r.ex || []).map(e => nameIn(d)(e.id)).join(', ') || exCount(0)}</span>
+          </button>
+          <button type="button" className="iconbtn" aria-label={t('Edit {0}', r.name)} title={t('Edit')} onClick={() => openRoutine(r)}><Icon name="pencil" /></button>
+          <button type="button" className="iconbtn" style={{ color: 'var(--red)' }} onClick={() => remove(r)} aria-label={t('Remove {0}', r.name)}><Icon name="minus" /></button>
+        </div>)}</div>
+        <p className="sect-f">{t('Tap a routine to edit it. Changes go to the athlete right away.')}</p>
+      </>}
+  </>
+}
+
+/** Progress photos of an athlete for the coach Body tab: dayPhotos + workout media, by date. */
+function athletePhotosOf(d) {
+  const out = []
+  const day = d.dayPhotos && typeof d.dayPhotos === 'object' ? d.dayPhotos : {}
+  for (const [hash, e] of Object.entries(day)) {
+    if (e && e.d && e.m && e.m.hash) out.push({ key: 'd:' + hash, d: e.d, m: e.m })
+  }
+  for (const w of d.workouts || []) {
+    if (!w || !Array.isArray(w.media)) continue
+    for (const m of w.media) {
+      if (m && m.hash && (m.kind === 'image' || m.kind === 'gif' || !m.kind))
+        out.push({ key: 'w:' + (w.id || '') + ':' + m.hash, d: w.d || '', m })
+    }
+  }
+  return out.sort((a, b) => (b.d || '').localeCompare(a.d || '') || (b.m.at || 0) - (a.m.at || 0))
+}
+
+function useTeamMediaUrl(athleteId, file) {
+  const hash = file && typeof file.hash === 'string' ? file.hash : null
+  const [url, setUrl] = useState(null)
+  useEffect(() => {
+    if (!hash || !athleteId) { setUrl(null); return }
+    let alive = true
+    let obj = null
+    apiBlob('/api/team/media/' + hash + '?athlete=' + encodeURIComponent(athleteId), { expectSize: file.size })
+      .then(blob => { if (!alive) return; obj = URL.createObjectURL(blob); setUrl(obj) })
+      .catch(() => { if (alive) setUrl(null) })
+    return () => { alive = false; if (obj) URL.revokeObjectURL(obj) }
+  }, [hash, athleteId, file?.size])
+  return url
+}
+
+function TeamPhotoThumb({ athleteId, photo, onOpen }) {
+  const url = useTeamMediaUrl(athleteId, photo.m)
+  return <button type="button" className="wmedia-item" data-swipe-ignore onClick={() => onOpen(photo)} aria-label={fmtDate(photo.d, true)}>
+    {url ? <img src={url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : <span className="dim"><Icon name="image" /></span>}
+  </button>
+}
+
+function TeamPhotoView({ athleteId, photo, close }) {
+  const url = useTeamMediaUrl(athleteId, photo.m)
+  return <div className="mviewer" role="dialog" aria-modal="true" aria-label={t('Photo')}>
+    <div className="mviewer-bar">
+      <button type="button" className="iconbtn" aria-label={t('Close')} onClick={close}><Icon name="xmark" /></button>
+      <span className="mviewer-count">{fmtDate(photo.d, true, true)}</span>
+      <span style={{ width: 36 }} />
+    </div>
+    <div className="mviewer-stage">{url
+      ? <img src={url} alt="" style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain' }} />
+      : <div className="dim">{t('Loading…')}</div>}</div>
+  </div>
+}
+
+function AthleteBody({ d }) {
+  const openSheet = useUI(s => s.openSheet)
+  const unit = d.unit || 'kg'
+  const bw = (d.bodyweight || []).filter(b => b && b.d && Number(b.w) > 0)
+  const points = bw.slice(-60).map(b => ({ t: Date.parse(b.d + 'T12:00:00'), y: Number(b.w), d: b.d }))
+  const photos = useMemo(() => athletePhotosOf(d), [d])
+  const groups = useMemo(() => {
+    const map = new Map()
+    for (const p of photos) {
+      if (!map.has(p.d)) map.set(p.d, [])
+      map.get(p.d).push(p)
+    }
+    return [...map.entries()].map(([day, items]) => ({ d: day, items }))
+  }, [photos])
+  const measurements = (d.measurements || []).filter(m => m && m.d).slice().reverse()
+  const openPhoto = p => openSheet(close => <TeamPhotoView athleteId={d.athlete.id} photo={p} close={close} />, { kind: 'viewer' })
+  return <>
+    <h4 className="sec">{t('Body weight')}</h4>
+    {!bw.length
+      ? <div className="empty" style={{ padding: '12px 0' }}>{t('No weigh-ins yet')}</div>
+      : <>
+        {points.length > 1 && <div className="card"><div className="chart"><LineChart points={points} h={140} unit={unit} /></div></div>}
+        <div className="list">{bw.slice().reverse().slice(0, 30).map(b => <div key={b.d + (b.id || '')} className="item">
+          <div className="grow"><div className="tt">{fmtDate(b.d, true)}</div></div>
+          <span className="small" style={{ fontWeight: 600 }}>{fmtNum(b.w)} {unit}</span>
+        </div>)}</div>
+      </>}
+
+    <h4 className="sec">{t('Progress photos')}</h4>
+    {!photos.length
+      ? <div className="empty" style={{ padding: '12px 0' }}>{t('No progress photos yet')}</div>
+      : groups.map(g => <div key={g.d} style={{ marginBottom: 12 }}>
+        <div className="small dim" style={{ marginBottom: 6 }}>{fmtDate(g.d, true)}</div>
+        <div className="wmedia-grid">{g.items.map(p => <TeamPhotoThumb key={p.key} athleteId={d.athlete.id} photo={p} onOpen={openPhoto} />)}</div>
+      </div>)}
+
+    <h4 className="sec">{t('Body measurements')}</h4>
+    {!measurements.length
+      ? <div className="empty" style={{ padding: '12px 0' }}>{t('No measurements yet')}</div>
+      : <div className="list">{measurements.slice(0, 20).map(m => {
+        const bits = MEASUREMENT_FIELDS
+          .filter(f => m[f.key] != null)
+          .map(f => {
+            const u = measurementUnit(unit, f)
+            const v = toMeasurementDisplay(m[f.key], unit, f)
+            return t(f.label) + ' ' + fmtNum(v) + (u === '%' ? '%' : ' ' + u)
+          })
+        const other = (m.other || []).filter(o => o && o.value != null).map(o => (o.name || '') + ' ' + fmtNum(o.value))
+        return <div key={m.d} className="item" style={{ display: 'block' }}>
+          <div className="tt">{fmtDate(m.d, true)}</div>
+          <div className="ss">{[...bits, ...other].join(' · ') || '—'}</div>
+        </div>
+      })}</div>}
   </>
 }
 

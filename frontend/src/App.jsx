@@ -85,10 +85,12 @@ const CoachIntake = lazyView(() => import('./views/CoachIntake.jsx'))
 const CoachSetup = lazyView(() => import('./views/CoachSetup.jsx'))
 const StructuralBalance = lazyView(() => import('./views/StructuralBalance.jsx'))
 const ProgressPhotos = lazyView(() => import('./views/ProgressPhotos.jsx'))
+const Diet = lazyView(() => import('./views/Diet.jsx'))
 // The tabs and screens past Home (Stats, History, the Library, Settings, ...) as well: a start
 // only needs Home, and these are fetched right behind it the same way.
 const CheckIn = lazyView(() => import('./views/CheckIn.jsx'))
 const RoutineEdit = lazyView(() => import('./views/RoutineEdit.jsx'))
+const TeamRoutineEdit = lazyView(() => import('./views/TeamRoutineEdit.jsx'))
 const Programmes = lazyView(() => import('./views/Programmes.jsx'))
 const ProgrammeEdit = lazyView(() => import('./views/Programmes.jsx').then(m => ({ default: m.ProgrammeEdit })))
 const Stats = lazyView(() => import('./views/Stats.jsx'))
@@ -185,14 +187,29 @@ function Shell() {
   // Same shape as the language: a module-level display setting, pushed when it changes (#139).
   useEffect(() => { setWeightDecimals(S.wdec) }, [S.wdec])
   useEffect(() => { document.documentElement.lang = lang }, [langV, lang])
-  // The tab's title and icon follow the site's name and logo (Admin → Site).
+  // Tab title, share meta and in-app favicon follow Admin → Site. The Home Screen icon stays
+  // the packaged apple-touch-icon.png (opaque): a white Admin logo on transparency vanishes on
+  // iOS. Crawlers that never run JS still see SITE_NAME from web/10-site-name.sh.
   const site = siteOf(config)
   useEffect(() => {
     document.title = site.name
-    let link = document.querySelector('link[rel="icon"][data-site]')
-    if (!site.logo) { link?.remove(); return }
-    if (!link) { link = document.createElement('link'); link.rel = 'icon'; link.dataset.site = ''; document.head.appendChild(link) }
-    link.href = site.logo
+    const setMeta = (sel, attr, value) => {
+      const el = document.querySelector(sel)
+      if (el) el.setAttribute(attr, value)
+    }
+    setMeta('meta[name="apple-mobile-web-app-title"]', 'content', site.name)
+    setMeta('meta[property="og:title"]', 'content', site.name)
+    setMeta('meta[property="og:site_name"]', 'content', site.name)
+    setMeta('meta[name="twitter:title"]', 'content', site.name)
+    if (!site.logo) {
+      document.querySelector('link[rel="icon"][data-site]')?.remove()
+      for (const l of document.querySelectorAll('link[rel="icon"]:not([data-site])')) l.disabled = false
+      return
+    }
+    let icon = document.querySelector('link[rel="icon"][data-site]')
+    if (!icon) { icon = document.createElement('link'); icon.rel = 'icon'; icon.dataset.site = ''; document.head.appendChild(icon) }
+    icon.href = site.logo
+    for (const l of document.querySelectorAll('link[rel="icon"]:not([data-site])')) l.disabled = true
   }, [site.name, site.logo])
   // Forward navigation starts at the top; going back lands where you left off.
   // The position is recorded from scroll events rather than read at route
@@ -355,7 +372,9 @@ function Shell() {
       <Route path="/plan/programmes" element={isAthlete(user) ? <Navigate to="/plan" replace /> : <Programmes />} />
       <Route path="/plan/prog/:id" element={isAthlete(user) ? <Navigate to="/plan" replace /> : <ProgrammeEdit />} />
       <Route path="/team" element={isCoach(user) ? <Team /> : <Navigate to="/home" replace />} />
+      <Route path="/team/:id/r/:rid" element={isCoach(user) ? <TeamRoutineEdit /> : <Navigate to="/home" replace />} />
       <Route path="/team/:id" element={isCoach(user) ? <TeamAthlete /> : <Navigate to="/home" replace />} />
+      <Route path="/diet" element={<Diet />} />
       <Route path="/workout" element={<Workout />} />
       <Route path="/stats" element={<Stats />} />
       <Route path="/history" element={<History />} />

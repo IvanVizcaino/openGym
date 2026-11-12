@@ -183,6 +183,8 @@ export default function Plan() {
       <div className="hdr-actions">
         {showCoach && !locked && <Button size="sm" variant="tinted" icon="sparkles" onClick={() => nav('/coach')}>{t('Coach')}</Button>}
         {isCoach(user) && <Button size="sm" variant="tinted" icon="person" onClick={() => nav('/team')}>{t('Athletes')}</Button>}
+        {isCoach(user) && <Button size="sm" variant="tinted" icon="note" onClick={() => import('./Team.jsx').then(m => m.coachDietSheet())}>{t('Diet')}</Button>}
+        {locked && <Button size="sm" variant="tinted" icon="note" onClick={() => nav('/diet')}>{t('Diet')}</Button>}
         {locked
           ? planHasRoutines(S) && <button className="iconbtn" onClick={printWholePlan} aria-label={t('Print / Save as PDF')} title={t('Print / Save as PDF')}><Icon name="note" /></button>
           : <button className="iconbtn" data-tour="plan-menu" onClick={openMenu} aria-label={t('Plan options')} title={t('Plan options')}><Icon name="share" /></button>}

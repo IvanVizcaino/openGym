@@ -293,7 +293,10 @@ then on:
 
 **Admin → Site** sets the name and logo shown on the sign-in screen and in the browser tab. The
 logo is a PNG, JPEG or WebP image of at most 256 KB, kept as `./data/site-logo.*`; the name is in
-`./data/site.json`. `SITE_NAME` in `.env` is the name until an admin sets one.
+`./data/site.json`. `SITE_NAME` in `.env` is the name until an admin sets one. The web container
+also bakes `SITE_NAME` into `index.html` at start (`web/10-site-name.sh`) so WhatsApp and similar
+link previews show that name without running JavaScript — keep it in sync with Admin → Site
+(e.g. `SITE_NAME=AceroFit`).
 
 ### Default language
 
@@ -351,15 +354,18 @@ same device.
 Prefer to keep the whole thing off the open internet? A VPN or an auth proxy (Authelia, Cloudflare
 Access…) in front still works, and composes with the above.
 
-Behind an auth proxy, let three files through without a login: `/icon-180.png`, `/icon-512.png`
-and `/manifest.json` — the app's icon and its manifest, nothing personal in them. iOS fetches the
-Home Screen icon outside the page, without your session cookie, so a gated icon comes back as the
-proxy's login page and iOS 26 draws a letter tile instead of the dumbbell (observed on iOS 26.6
-behind Teleport; Authelia users know the same from favicons and manifests). Authelia: a `bypass`
-rule for those paths; Authentik: unauthenticated paths; Cloudflare Access: a bypass policy;
-oauth2-proxy: `skip_auth_routes`. A proxy that cannot exempt a path (Teleport) has to serve the
-icons inline as `data:` URLs instead — Safari 26 accepts those, older iOS does not, which is why
-that is not the default here.
+Behind an auth proxy, let these through without a login: `/icon-180.png`, `/icon-512.png`,
+`/apple-touch-icon.png`, `/manifest.json`, `/api/site/manifest` and `/api/site/logo` — the app's
+icon and its manifest (and the Admin → Site logo when one is set), nothing personal in them.
+`/manifest.json` is proxied to `/api/site/manifest` so the installed name follows `SITE_NAME` /
+Admin → Site. `/apple-touch-icon.png` is the packaged opaque app icon (what Safari reads from the
+HTML for Add to Home Screen); keep it ungated. iOS fetches that icon outside the page, without
+your session cookie, so a gated icon comes back as the proxy's login page and iOS draws a letter
+tile instead (observed on iOS 26.6 behind Teleport; Authelia users know the same from favicons and
+manifests). Authelia: a `bypass` rule for those paths; Authentik: unauthenticated paths; Cloudflare
+Access: a bypass policy; oauth2-proxy: `skip_auth_routes`. A proxy that cannot exempt a path
+(Teleport) has to serve the icons inline as `data:` URLs instead — Safari 26 accepts those, older
+iOS does not, which is why that is not the default here.
 
 ### Password sign-in (optional)
 

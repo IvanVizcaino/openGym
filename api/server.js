@@ -44,7 +44,7 @@ import { integrationRoutes } from './integrations/routes.js';
 import { excusedOn, nudgeFor, nudgeWindowOpen, toneOf } from './nudge.js';
 import { wrappedPushYear, wrappedSummary, wrappedPushOwed, wrappedPush } from './wrapped.js';
 import {
-  ROLES, roleOf as teamRoleOf, lockPlan, planOf, assignRoutines, removeRoutine, setWeek, athleteRow,
+  ROLES, roleOf as teamRoleOf, lockPlan, planOf, assignRoutines, updateRoutine, removeRoutine, setWeek, setDiet, athleteRow,
   parseLogo, logoMime, cleanSiteName
 } from './team.js';
 
@@ -683,6 +683,23 @@ function requireCoach(req, res) {
 }
 // A profile a coach may plan for: an athlete on this instance.
 const athleteOf = id => db.users.find(u => u.id === id && !isCoach(u)) || null;
+// Hashes a coach may fetch for an athlete's Body tab: dayPhotos and workout progress media
+// (not set-form videos, which stay on the athlete's phone / private).
+function teamMediaRefs(S) {
+  const out = new Set();
+  const add = m => {
+    if (m && typeof m === 'object' && typeof m.hash === 'string' && HASH_RE.test(m.hash)) out.add(m.hash);
+    if (m?.poster && typeof m.poster.hash === 'string' && HASH_RE.test(m.poster.hash)) out.add(m.poster.hash);
+  };
+  if (S?.dayPhotos && typeof S.dayPhotos === 'object') {
+    for (const e of Object.values(S.dayPhotos)) if (e && typeof e === 'object' && e.m) add(e.m);
+  }
+  for (const w of (Array.isArray(S?.workouts) ? S.workouts : [])) {
+    if (!w || typeof w !== 'object' || !Array.isArray(w.media)) continue;
+    for (const m of w.media) add(m);
+  }
+  return out;
+}
 // A coach's change to an athlete's document, written the way PUT /api/data writes one: the next
 // revision and a new write id, so every device of the athlete sees the revision move and merges
 // the coach's stamped changes in. Returns an HTTP status on failure, nothing on success.
@@ -3023,6 +3040,28 @@ const routes = {
     });
     res.end(bytes);
   },
+  // Public PWA manifest: the site's name and logo (Admin → Site / SITE_NAME). Served at
+  // /api/site/manifest and also as /manifest.json via nginx, so start_url and icons stay
+  // relative to the app root (including under BASE_PATH).
+  'GET /api/site/manifest': async (req, res) => {
+    const name = siteConfig().name;
+    // Paths relative to the app root (where /manifest.json is), never leading `/`, so a
+    // subpath deployment resolves them under BASE_PATH. Home Screen icons are the packaged
+    // opaque icons (apple-touch-icon.png → icon-180.png), not the Admin → Site logo: a white
+    // mark on transparency vanishes on iOS. The site name still comes from Admin → Site.
+    const icons = [
+      { src: 'apple-touch-icon.png', sizes: '180x180', type: 'image/png', purpose: 'any' },
+      { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' }
+    ];
+    json(res, 200, {
+      name, short_name: name,
+      description: 'Personal gym & body weight tracker',
+      start_url: './', scope: './',
+      display: 'standalone', orientation: 'portrait',
+      background_color: '#0c0e12', theme_color: '#0c0e12',
+      icons
+    });
+  },
 
   'GET /api/admin/invites': async (req, res) => {
     if (!requireAdmin(req, res)) return;
@@ -3105,24 +3144,49 @@ const routes = {
     const athletes = db.users.filter(u => !isCoach(u)).map(u => athleteRow(u, readStateCached(u.id) || {}));
     json(res, 200, { athletes });
   },
-  // One athlete: the plan the coach edits, and what the stats are drawn from. A workout's photos
-  // and videos stay the athlete's own, as in the admin drill-down.
+  // One athlete: the plan the coach edits, and what the stats / Body tab are drawn from.
+  // Workout set videos stay the athlete's own; progress photos (workout media + dayPhotos) go
+  // to the coach, fetched through GET /api/team/media/{hash}.
   'GET /api/team/athlete': async (req, res) => {
     if (!requireCoach(req, res)) return;
     const u = athleteOf(new URL(req.url, 'http://x').searchParams.get('id'));
     if (!u) return json(res, 404, { error: 'no such athlete' });
     const S = readStateStrict(u.id);
     if (S === UNREADABLE) return json(res, 503, { error: 'state unreadable' });
+    const dayPhotos = {};
+    if (S?.dayPhotos && typeof S.dayPhotos === 'object' && !Array.isArray(S.dayPhotos)) {
+      for (const [hash, e] of Object.entries(S.dayPhotos)) {
+        if (!HASH_RE.test(hash) || !e || typeof e !== 'object') continue;
+        if (typeof e.d === 'string' && e.m && typeof e.m === 'object') dayPhotos[hash] = { d: e.d, m: e.m };
+      }
+    }
     json(res, 200, {
       athlete: athleteRow(u, S || {}),
       plan: planOf(S || {}),
       unit: S?.unit || 'kg',
-      workouts: records(S?.workouts).map(({ media, ...w }) => w),
+      workouts: records(S?.workouts).map(({ media, ...w }) => (
+        Array.isArray(media) && media.length ? { ...w, media } : w
+      )),
       bodyweight: records(S?.bodyweight),
       measurements: records(S?.measurements),
+      dayPhotos,
       exWeights: S?.exWeights && typeof S.exWeights === 'object' ? S.exWeights : {},
       customEx: records(S?.customEx).map(({ media, ...x }) => x)
     });
+  },
+  // A coach reading one of an athlete's progress photos (referenced in dayPhotos or workout media).
+  'GET /api/team/media/{hash}': async (req, res) => {
+    if (!requireCoach(req, res)) return;
+    const a = athleteOf(new URL(req.url, 'http://x').searchParams.get('athlete'));
+    if (!a) return json(res, 404, { error: 'no such athlete' });
+    const S = readStateStrict(a.id);
+    if (S === UNREADABLE) return json(res, 503, { error: 'state unreadable' });
+    const hash = req.mediaHash;
+    if (!teamMediaRefs(S || {}).has(hash)) return json(res, 404, { error: 'no such photo' });
+    if (!MEDIA_ON) return json(res, 404, { error: 'media off' });
+    const f = MEDIA.file(a.id, hash);
+    if (!f) throw new MediaError(404, 'media-missing');
+    await sendMediaFile(res, f, hash);
   },
   // Copies of the coach's own routines into the plans of the athletes named, each copy on the
   // weekdays given for it (`days: { [routineId]: ['1', '4'] }`, getDay() numbers).
@@ -3163,6 +3227,32 @@ const routes = {
     audit(req, 'team.unassign', { user: coach, target: a });
     json(res, 200, { ok: true });
   },
+  // Edit a copy already in an athlete's plan (add/remove exercises, rename, …) without
+  // re-assigning from the coach's own library.
+  'PUT /api/team/routine': async (req, res) => {
+    const coach = requireCoach(req, res); if (!coach) return;
+    const body = await readBody(req);
+    const a = athleteOf(body.athlete);
+    if (!a) return json(res, 404, { error: 'no such athlete' });
+    if (!body.routine || typeof body.routine !== 'object' || Array.isArray(body.routine) || body.routine.id == null)
+      return json(res, 400, { error: 'routine required' });
+    const rid = text(body.routine.id);
+    // Custom exercises the edited routine uses go along, or the athlete's app would show them unnamed.
+    const usedEx = new Set(records(body.routine.ex).map(e => String(e.id)));
+    const customEx = records(readState(coach.id)?.customEx).filter(x => usedEx.has(String(x.id)));
+    let plan, found = false;
+    const r = changeState(a.id, S => {
+      found = !!updateRoutine(S, rid, body.routine);
+      if (!found) return;
+      S.customEx = records(S.customEx);
+      for (const x of customEx) if (!S.customEx.some(y => String(y.id) === String(x.id))) S.customEx.push({ ...x, _ts: Date.now() });
+      plan = planOf(S);
+    });
+    if (r) return json(res, r, { error: 'state unreadable' });
+    if (!found) return json(res, 404, { error: 'no such routine' });
+    audit(req, 'team.routine', { user: coach, target: a, msg: rid });
+    json(res, 200, { ok: true, plan });
+  },
   'PUT /api/team/week': async (req, res) => {
     const coach = requireCoach(req, res); if (!coach) return;
     const body = await readBody(req);
@@ -3173,6 +3263,18 @@ const routes = {
     const r = changeState(a.id, S => { setWeek(S, body.week); plan = planOf(S); });
     if (r) return json(res, r, { error: 'state unreadable' });
     audit(req, 'team.week', { user: coach, target: a });
+    json(res, 200, { ok: true, plan });
+  },
+  'PUT /api/team/diet': async (req, res) => {
+    const coach = requireCoach(req, res); if (!coach) return;
+    const body = await readBody(req);
+    const a = athleteOf(body.athlete);
+    if (!a) return json(res, 404, { error: 'no such athlete' });
+    if (typeof body.diet !== 'string') return json(res, 400, { error: 'diet required' });
+    let plan;
+    const r = changeState(a.id, S => { setDiet(S, body.diet); plan = planOf(S); });
+    if (r) return json(res, r, { error: 'state unreadable' });
+    audit(req, 'team.diet', { user: coach, target: a });
     json(res, 200, { ok: true, plan });
   },
   // A coach's invites for athletes. The admin's list (GET /api/admin/invites) holds them too.
@@ -3307,6 +3409,8 @@ const server = http.createServer(async (req, res) => {
   // above stays a plain lookup, and so csrfOk and the catch-all see one name for every file.
   const mm = /^\/api\/media\/([0-9a-f]{64})$/.exec(url.pathname);
   if (mm) { key = req.method + ' /api/media/{hash}'; req.mediaHash = mm[1]; }
+  const tm = /^\/api\/team\/media\/([0-9a-f]{64})$/.exec(url.pathname);
+  if (tm) { key = req.method + ' /api/team/media/{hash}'; req.mediaHash = tm[1]; }
   const handler = routes[key];
   if (!handler) return json(res, 404, { error: 'not found' });
   if (!csrfOk(req, key)) {

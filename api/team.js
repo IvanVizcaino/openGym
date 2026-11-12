@@ -6,9 +6,9 @@
 //
 // Two ways the plan of an athlete changes:
 //   - a coach assigns one of their own routines (a copy, tagged with where it came from, so the
-//     same routine assigned again replaces that copy), removes one, or sets the week. The copy is
-//     stamped the way the app stamps its own edits (sync-stamps.js), so an athlete's device takes
-//     the coach's version on its next merge.
+//     same routine assigned again replaces that copy), edits that copy in place, removes one, or
+//     sets the week. The copy is stamped the way the app stamps its own edits (sync-stamps.js),
+//     so an athlete's device takes the coach's version on its next merge.
 //   - an athlete's own push (PUT /api/data) never changes it: lockPlan puts back the stored plan
 //     and its stamps before anything else reads the document.
 
@@ -23,6 +23,25 @@ const isMap = v => !!v && typeof v === 'object' && !Array.isArray(v);
 const clone = v => (v === undefined ? v : JSON.parse(JSON.stringify(v)));
 const same = (x, y) => JSON.stringify(x) === JSON.stringify(y);
 
+export const DIET_MAX = 50000;
+
+/** Strip tags/attrs that must never reach an athlete's device (mirrors frontend/src/lib/safe-html.js). */
+function scrubDietHtml(html) {
+  let s = String(html || '');
+  s = s.replace(/<!--[\s\S]*?-->/g, '');
+  s = s.replace(/<(script|style)(\s[^>]*)?>[\s\S]*?<\/\1>/gi, '');
+  s = s.replace(/<\/?(script|style|iframe|object|embed|link|meta|base|form|input|button|textarea|svg|math)(\s[^>]*)?\/?>/gi, '');
+  s = s.replace(/\s(on\w+|formaction|style|class|id)\s*=\s*("[^"]*"|'[^']*'|[^\s>]+)/gi, '');
+  s = s.replace(/\s(href|src)\s*=\s*(['"]?)\s*javascript:[^'"\s>]*/gi, ' href="#"');
+  return s;
+}
+
+/** A diet string as stored: HTML from the coach editor (or legacy Markdown), capped. Empty clears it. */
+export function cleanDiet(v) {
+  if (typeof v !== 'string') return '';
+  return scrubDietHtml(v.replace(/\u0000/g, '')).slice(0, DIET_MAX);
+}
+
 /** The plan as the coach's screen shows it. */
 export function planOf(S) {
   const routines = (Array.isArray(S?.routines) ? S.routines : []).filter(isMap);
@@ -32,7 +51,16 @@ export function planOf(S) {
     const ids = (Array.isArray(v) ? v : v != null ? [v] : []).filter(x => typeof x === 'string' || typeof x === 'number');
     if (ids.length) week[d] = ids.map(String);
   }
-  return { routines, week, programme: S?.programme || null, rotation: S?.rotation || null };
+  const diet = typeof S?.diet === 'string' ? S.diet : '';
+  return { routines, week, programme: S?.programme || null, rotation: S?.rotation || null, diet };
+}
+
+/** Sets the athlete's diet (coach-owned). Mutates `S`. */
+export function setDiet(S, text, now = Date.now()) {
+  const next = cleanDiet(text);
+  const ed = isMap(S.edited) ? S.edited : (S.edited = {});
+  if (next) S.diet = next; else delete S.diet;
+  ed.diet = now;
 }
 
 // The copy of a coach's routine that goes into an athlete's plan: the same exercises under a new
@@ -80,6 +108,28 @@ function setDays(S, id, want, now) {
     if (next.length) S.week[d] = next; else delete S.week[d];
     ed['week.' + d] = now;
   }
+}
+
+export const ROUTINE_EX_MAX = 40;
+
+/**
+ * Replaces the body of routine `id` in `S` with `patch` (name, emoji, prog, ex, …). Keeps the
+ * copy's id and `coach` tag so re-assign still finds it. Mutates `S`. Returns the updated
+ * routine, or null if it was not in the plan.
+ */
+export function updateRoutine(S, id, patch, now = Date.now()) {
+  if (!isMap(patch)) return null;
+  S.routines = (Array.isArray(S.routines) ? S.routines : []).filter(isMap);
+  const at = S.routines.findIndex(r => String(r.id) === String(id));
+  if (at < 0) return null;
+  const prev = S.routines[at];
+  const { id: _id, _ts, _f, _u, coach: _coach, ...body } = clone(patch);
+  if (Array.isArray(body.ex)) body.ex = body.ex.filter(isMap).slice(0, ROUTINE_EX_MAX);
+  else delete body.ex;
+  if (typeof body.name === 'string') body.name = body.name.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, 80) || prev.name || 'Routine';
+  const x = { ...body, id: prev.id, coach: prev.coach };
+  S.routines[at] = stampEntry(prev, x, now);
+  return S.routines[at];
 }
 
 /** Removes routine `id` from `S` and from every day of its week. Returns whether it was there. */

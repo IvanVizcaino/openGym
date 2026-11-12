@@ -112,6 +112,33 @@ test('a coach plans an athlete, and the athlete cannot change the plan', async t
   assert.equal(one.body.workouts.length, 1);
   assert.equal(one.body.plan.routines[0].id, copyId);
 
+  // Diet: coach writes it, athlete push cannot change it, athlete GET via their own state.
+  const diet = await h.call(COACH, 'PUT', '/api/team/diet', { athlete: ATHLETE, diet: '## Lunch\nChicken and rice' });
+  assert.equal(diet.status, 200);
+  assert.equal(diet.body.plan.diet, '## Lunch\nChicken and rice');
+  assert.equal(h.state(ATHLETE).diet, '## Lunch\nChicken and rice');
+  assert.equal((await h.call(ATHLETE, 'PUT', '/api/team/diet', { athlete: ATHLETE, diet: 'nope' })).status, 403);
+  const dietPush = await h.call(ATHLETE, 'PUT', '/api/data', {
+    baseRev: h.state(ATHLETE)._rev,
+    state: { ...h.state(ATHLETE), diet: 'athlete hack' }
+  });
+  assert.equal(dietPush.status, 200);
+  assert.equal(h.state(ATHLETE).diet, '## Lunch\nChicken and rice');
+  assert.equal((await h.call(COACH, 'GET', `/api/team/athlete?id=${ATHLETE}`)).body.plan.diet, '## Lunch\nChicken and rice');
+
+  // Edit the assigned copy in place (add an exercise, rename) without re-assigning.
+  const edited = await h.call(COACH, 'PUT', '/api/team/routine', {
+    athlete: ATHLETE,
+    routine: { id: copyId, name: 'Push edited', emoji: 'dumbbell', ex: [{ id: '0025', sets: 4 }, { id: 'cx1', sets: 3 }] },
+  });
+  assert.equal(edited.status, 200, JSON.stringify(edited.body));
+  assert.equal(edited.body.plan.routines[0].name, 'Push edited');
+  assert.equal(edited.body.plan.routines[0].ex.length, 2);
+  assert.equal(edited.body.plan.routines[0].id, copyId);
+  assert.equal(h.state(ATHLETE).routines[0].name, 'Push edited');
+  assert.equal(h.state(ATHLETE).routines[0].coach.rid, 'push');
+  assert.equal((await h.call(ATHLETE, 'PUT', '/api/team/routine', { athlete: ATHLETE, routine: { id: copyId, name: 'nope' } })).status, 403);
+
   // The week, then removing the routine.
   const w = await h.call(COACH, 'PUT', '/api/team/week', { athlete: ATHLETE, week: { 3: [copyId] } });
   assert.equal(w.status, 200);
@@ -177,8 +204,18 @@ test('the admin sets the site name and logo, and everybody reads them', async t 
   assert.equal(logo.type, 'image/png');
   assert.deepEqual(logo.body, PNG);
 
+  const man = await h.call(null, 'GET', '/api/site/manifest');
+  assert.equal(man.status, 200);
+  assert.equal(man.body.name, 'Crossfit Sur');
+  assert.equal(man.body.short_name, 'Crossfit Sur');
+  assert.equal(man.body.start_url, './');
+  assert.equal(man.body.icons[0].src, 'apple-touch-icon.png');
+  assert.equal(man.body.icons[1].src, 'icon-512.png');
+
   assert.equal((await h.call(ADMIN, 'DELETE', '/api/admin/site/logo')).body.site.logo, null);
   assert.equal((await h.call(null, 'GET', '/api/site/logo')).status, 404);
+  const manOff = await h.call(null, 'GET', '/api/site/manifest');
+  assert.equal(manOff.body.icons[0].src, 'apple-touch-icon.png');
   assert.equal((await h.call(ADMIN, 'PUT', '/api/admin/site', { name: '' })).body.site.name, 'Box Norte');
 });
 

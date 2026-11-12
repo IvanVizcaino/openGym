@@ -2,9 +2,12 @@ import { describe, it, expect } from 'vitest'
 import { keepServerPlan, roleOf, isAthlete, isCoach, athleteStats, toggleDay } from './team.js'
 
 describe('roles', () => {
-  it('reads the role the server sends, and nothing else', () => {
+  it('reads the role the server sends; otherwise admin coaches and everybody else trains', () => {
     expect(roleOf({ role: 'coach' })).toBe('coach')
-    expect(roleOf({ role: 'boss' })).toBe(null)
+    expect(roleOf({ role: 'athlete' })).toBe('athlete')
+    expect(roleOf({ role: 'boss' })).toBe('athlete')
+    expect(roleOf({ admin: true })).toBe('coach')
+    expect(roleOf({})).toBe('athlete')
     expect(roleOf(null)).toBe(null)
     expect(isAthlete({ role: 'athlete' })).toBe(true)
     expect(isCoach({ role: 'athlete' })).toBe(false)
@@ -23,9 +26,9 @@ describe('keepServerPlan', () => {
     expect(m.workouts).toEqual([{ d: 'x' }])
   })
 
-  it('leaves a coach, a profile without a role and a copy with no server alone', () => {
+  it('leaves a coach and a copy with no server alone; a profile with no role trains', () => {
     expect(keepServerPlan({ role: 'coach' }, server, merged()).routines[0].id).toBe('sample')
-    expect(keepServerPlan({}, server, merged()).routines[0].id).toBe('sample')
+    expect(keepServerPlan({}, server, merged()).routines).toEqual(server.routines)
     expect(keepServerPlan({ role: 'athlete' }, null, merged()).routines[0].id).toBe('sample')
   })
 })

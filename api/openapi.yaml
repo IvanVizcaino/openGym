@@ -3177,6 +3177,24 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /api/site/manifest:
+    get:
+      tags: [meta]
+      operationId: siteManifest
+      summary: The PWA manifest
+      description: >-
+        Public. `name` / `short_name` follow Admin → Site (or `SITE_NAME`). Icons are the
+        packaged opaque app icons (`apple-touch-icon.png`, `icon-512.png`), not the Admin logo
+        (a white mark on transparency vanishes on iOS). Also served as `/manifest.json` by the
+        web container so `start_url` and icon paths stay relative to the app root.
+      security: []
+      responses:
+        '200':
+          description: A Web App Manifest.
+          content:
+            application/json:
+              schema: { type: object }
+
   /api/team/athletes:
     get:
       tags: [team]
@@ -3216,9 +3234,9 @@ paths:
       responses:
         '200':
           description: >-
-            The plan (`routines`, `week` by getDay() number, `programme`, `rotation`) and what the
-            stats are drawn from (`workouts` without photos and videos, `bodyweight`,
-            `measurements`, `exWeights`, `customEx`).
+            The plan (`routines`, `week` by getDay() number, `programme`, `rotation`, `diet`) and
+            what the stats / Body tab are drawn from (`workouts` with progress `media`,
+            `bodyweight`, `measurements`, `dayPhotos`, `exWeights`, `customEx`).
           content:
             application/json:
               schema: { type: object }
@@ -3231,6 +3249,34 @@ paths:
               schema: { $ref: '#/components/schemas/Error' }
         '503':
           description: The athlete's document cannot be read.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/team/media/{hash}:
+    get:
+      tags: [team]
+      operationId: teamMedia
+      summary: 'Coach: one progress photo of an athlete'
+      description: >-
+        Bytes of a file referenced in the athlete's `dayPhotos` or workout `media`. The hash must
+        be referenced; set-form videos are not exposed.
+      parameters:
+        - { name: hash, in: path, required: true, schema: { type: string, pattern: '^[0-9a-f]{64}$' } }
+        - { name: athlete, in: query, required: true, schema: { type: string } }
+      responses:
+        '200':
+          description: The image or video.
+          content:
+            image/jpeg: {}
+            image/png: {}
+            image/webp: {}
+            image/gif: {}
+            video/mp4: {}
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such athlete, hash not referenced, or file missing.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
@@ -3309,6 +3355,57 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /api/team/routine:
+    put:
+      tags: [team]
+      operationId: teamRoutine
+      summary: "Coach: edit a routine already in an athlete's plan"
+      description: >-
+        Updates the copy in the athlete's plan (name, exercises, progression, …) without
+        re-assigning from the coach's library. The copy keeps its id and coach tag. Custom
+        exercises the routine uses go along.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [athlete, routine]
+              properties:
+                athlete: { type: string }
+                routine:
+                  type: object
+                  required: [id]
+                  properties:
+                    id: { type: string }
+                    name: { type: string }
+                    emoji: { type: string }
+                    prog: { type: string }
+                    ex: { type: array, items: { type: object } }
+      responses:
+        '200':
+          description: The plan as it now stands.
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean }, plan: { type: object } } }
+        '400':
+          description: No routine body.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such athlete or routine.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: The athlete's document cannot be read.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
   /api/team/week:
     put:
       tags: [team]
@@ -3333,6 +3430,49 @@ paths:
               schema: { type: object, properties: { ok: { type: boolean }, plan: { type: object } } }
         '400':
           description: No week.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404':
+          description: No such athlete.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '503':
+          description: The athlete's document cannot be read.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+
+  /api/team/diet:
+    put:
+      tags: [team]
+      operationId: teamDiet
+      summary: "Coach: set an athlete's recommended diet"
+      description: >-
+        HTML from the coach's simple rich editor (or legacy Markdown). The athlete can
+        only read it. Empty string clears it. Cap 50 000
+        characters. Locked on the athlete's own `PUT /api/data` like the rest of the plan.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [athlete, diet]
+              properties:
+                athlete: { type: string }
+                diet: { type: string }
+      responses:
+        '200':
+          description: The plan as it now stands (includes `diet`).
+          content:
+            application/json:
+              schema: { type: object, properties: { ok: { type: boolean }, plan: { type: object } } }
+        '400':
+          description: No diet string.
           content:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }

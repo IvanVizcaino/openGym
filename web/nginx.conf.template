@@ -37,6 +37,40 @@ server {
     add_header Referrer-Policy "same-origin" always;
     add_header Content-Security-Policy "${CONTENT_SECURITY_POLICY}" always;
 
+    # Dynamic PWA manifest (name + logo from Admin → Site). Exact match so the `.json` regex
+    # below does not serve the static file from disk instead. The API answers at
+    # /api/site/manifest; icons and start_url in that JSON are relative to this path's directory
+    # (the app root), so BASE_PATH keeps working.
+    location = ${BASE_PATH}/manifest.json {
+        resolver ${RESOLVER} valid=10s ipv6=off;
+        set $api_upstream http://${BACKEND}:${PORT};
+        proxy_pass $api_upstream/api/site/manifest;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $remote_addr;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header CF-Connecting-IP "${CF_CONNECTING_IP}";
+    }
+
+    # Home Screen icon for iOS Safari. Safari reads <link rel="apple-touch-icon"> from the HTML
+    # before any JS runs. Served from the packaged icon-180.png (opaque, dark background) — not
+    # the Admin → Site logo, which is often a white mark on transparency and disappears on iOS.
+    location = ${BASE_PATH}/apple-touch-icon.png {
+        alias /usr/share/nginx/html/icon-180.png;
+        add_header Cache-Control "public, max-age=86400" always;
+        add_header X-Frame-Options "DENY" always;
+        add_header X-Content-Type-Options "nosniff" always;
+        add_header Referrer-Policy "same-origin" always;
+        add_header Content-Security-Policy "${CONTENT_SECURITY_POLICY}" always;
+    }
+    location = ${BASE_PATH}/apple-touch-icon {
+        rewrite ^ ${BASE_PATH}/apple-touch-icon.png last;
+    }
+    location = ${BASE_PATH}/apple-touch-icon-precomposed.png {
+        rewrite ^ ${BASE_PATH}/apple-touch-icon.png last;
+    }
+
     # API → backend container.
     # `^~` so this prefix beats the regex locations below: without it a request for a path such
     # as /api/anything.json would be matched by the \.(js|css|json|html)$ block instead and be

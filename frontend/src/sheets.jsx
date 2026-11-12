@@ -16,7 +16,9 @@ import { t, tn, dateLocale, instrFor, instrTranslated, descFor, exerciseNameFor,
 import { nav, closeThenNav, navToWorkout } from './lib/nav.js'
 import { buildStarterPlan, starterPlanDays, starterPlanOptions } from './lib/starter.js'
 import Media, { Thumb } from './components/Media.jsx'
-import CustomMediaField from './components/CustomMediaField.jsx'
+import CustomMediaField, { useMediaPicker } from './components/CustomMediaField.jsx'
+import { CustomThumb } from './components/CustomMedia.jsx'
+import { fileProgressPhoto, serverTakesDayPhotos } from './lib/day-photos.js'
 import WorkoutMediaSection, { workoutMediaCount } from './components/WorkoutMedia.jsx'
 import { FormVideosSection } from './components/SetVideo.jsx'
 import { workoutSetVideos } from './lib/set-videos.js'
@@ -358,6 +360,8 @@ function WeightInput({ value, setValue, unit }) {
 // one weigh-in ({ d, id }) to change; `initial` is a weight an assistant heard (lib/voice.js).
 function BwSheet({ required, onDone, close, initial, edit }) {
   const st = useStore(s => s.S)
+  const user = useStore(s => s.user)
+  const config = useStore(s => s.config)
   const unit = st.unit
   const bw = lastBW(st)
   const editing = useMemo(() => (edit ? readingsOf(st.bodyweight.find(b => b.d === edit.d)).find(r => r.id === String(edit.id)) || null : null), []) // eslint-disable-line react-hooks/exhaustive-deps
@@ -367,7 +371,25 @@ function BwSheet({ required, onDone, close, initial, edit }) {
   // by hand, the time stays when the date changes.
   const [time, setTime] = useState(editing ? (editing.at || DEFAULT_TIME) : timeOf(Date.now()))
   const [timeSet, setTimeSet] = useState(!!editing)
+  // Body photos with this weigh-in (full log only — the pre-workout check-in stays one tap).
+  const [photos, setPhotos] = useState([])
+  const { pick, busy, canAdd, note: mediaNote } = useMediaPicker()
+  const camRef = useRef(null)
+  const fileRef = useRef(null)
+  const canDay = serverTakesDayPhotos(user, config)
   const pickDate = d => { setDate(d); if (!timeSet) setTime(defaultTimeFor(st, d, todayISO())) }
+  const addPhoto = async file => {
+    if (!canAdd) { toast(mediaNote || t('Your server does not store photos and videos yet.')); return }
+    const got = await pick(file)
+    if (got) setPhotos(p => [...p, got])
+  }
+  const onPick = async (ev, multi) => {
+    const files = [...(ev.target.files || [])]
+    ev.target.value = ''
+    if (!files.length) return
+    if (multi) for (const f of files.slice(0, 6)) await addPhoto(f)
+    else await addPhoto(files[0])
+  }
   const save = () => {
     const n = Math.round((v || 0) * 10) / 10
     if (!n || n <= 0) { toast(t('Enter a valid weight')); return }
@@ -375,14 +397,24 @@ function BwSheet({ required, onDone, close, initial, edit }) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date > todayISO()) { toast(t('Choose a valid date')); return }
     // The check-in before a workout is now; a weigh-in at the same time of a day corrects it.
     const at = required ? timeOf(Date.now()) : cleanTime(time) || (date === todayISO() ? timeOf(Date.now()) : DEFAULT_TIME)
+    let photoN = 0
     update(s => {
       if (editing) editWeighIn(s, edit.d, edit.id, { d: date, at, w: n })
       else addWeighIn(s, { d: date, at, w: n })
+      for (const ref of photos) {
+        const r = fileProgressPhoto(s, date, ref, { canDay })
+        if (r === 'workout' || r === 'day') photoN++
+      }
     })
+    if (photoN) syncMedia({ force: true })
     close()
-    if (onDone) onDone(n); else toast(editing ? t('Weigh-in updated') : t('Weight saved'))
+    if (onDone) onDone(n)
+    else if (photoN) toast(tn('Weight and {0} photo saved', 'Weight and {0} photos saved', photoN))
+    else toast(editing ? t('Weigh-in updated') : t('Weight saved'))
   }
   const recent = useMemo(() => allReadings(st.bodyweight).reverse().slice(0, 3), [st.bodyweight])
+  // Always offer body photos on the full weigh-in sheet (not the pre-workout one-tap check-in).
+  const photosOn = !required
   return <>
     {/* This sheet opens `locked` — swipe/backdrop/Escape/Android-back all no-op on it (see
         Modals.jsx) so an accidental tap on "Start" can't be walked back by reflex the way
@@ -410,8 +442,32 @@ function BwSheet({ required, onDone, close, initial, edit }) {
           </label>
         </div>}
     <WeightInput value={v} setValue={setV} unit={unit} />
+    {photosOn && <>
+      <h4 className="sec">{t('Body photos')}</h4>
+      <div className="muted small" style={{ marginBottom: 8 }}>{t('Optional. Take a photo or attach one for this weigh-in. Your coach can review them.')}</div>
+      {photos.length > 0 && <div className="wmedia-grid" style={{ marginBottom: 10 }}>
+        {photos.map((m, i) => <div key={m.hash || i} className="wmedia-item" style={{ position: 'relative' }}>
+          <CustomThumb ex={{ custom: true, media: m }} />
+          <button type="button" className="iconbtn" style={{ position: 'absolute', top: 2, insetInlineEnd: 2, background: 'var(--fill-1)' }}
+            aria-label={t('Remove')} onClick={() => setPhotos(p => p.filter((_, j) => j !== i))}><Icon name="xmark" /></button>
+        </div>)}
+      </div>}
+      <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+        <Button size="sm" variant="tinted" icon={busy ? undefined : 'camera'} disabled={busy}
+          onClick={() => canAdd ? camRef.current?.click() : toast(mediaNote || t('Your server does not store photos and videos yet.'))}>
+          {busy ? t('Loading…') : t('Take photo')}
+        </Button>
+        <Button size="sm" variant="tinted" icon={busy ? undefined : 'image'} disabled={busy}
+          onClick={() => canAdd ? fileRef.current?.click() : toast(mediaNote || t('Your server does not store photos and videos yet.'))}>
+          {t('Attach')}
+        </Button>
+      </div>
+      {mediaNote && <div className="small dim" style={{ marginTop: 6 }}>{mediaNote}</div>}
+      <input ref={camRef} type="file" accept="image/*" capture="environment" hidden onChange={e => onPick(e, false)} />
+      <input ref={fileRef} type="file" accept="image/*" multiple hidden onChange={e => onPick(e, true)} />
+    </>}
     <div style={{ height: 14 }} />
-    <Button variant="primary" onClick={save}>{required ? t('Save & start workout') : t('Save')}</Button>
+    <Button variant="primary" onClick={save} disabled={busy}>{required ? t('Save & start workout') : t('Save')}</Button>
     {required && <>
       <div style={{ height: 8 }} /><Button variant="ghost" className="dim" onClick={() => { close(); onDone && onDone(null) }}>{t('Start without weighing in')}</Button>
       <div style={{ height: 2 }} /><Button variant="ghost" className="dim" icon="swap" onClick={() => closeThenNav(close, '/workout')}>{t('Choose a different workout')}</Button>

@@ -63,6 +63,13 @@
 </script>
 <title>openGym</title>
 <meta name="description" content="Personal gym & body weight tracker">
+<meta property="og:title" content="openGym">
+<meta property="og:site_name" content="openGym">
+<meta property="og:description" content="Personal gym & body weight tracker">
+<meta property="og:type" content="website">
+<meta name="twitter:card" content="summary">
+<meta name="twitter:title" content="openGym">
+<meta name="twitter:description" content="Personal gym & body weight tracker">
 <meta name="theme-color" content="#0c0e12">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
@@ -70,9 +77,11 @@
 <meta name="apple-mobile-web-app-title" content="openGym">
 <!-- use-credentials: browsers fetch the manifest without cookies, even same-origin; behind an auth
      proxy (Authelia, Cloudflare Access, Teleport…) that fetch is a login redirect and the Home Screen
-     icon comes out generic. iOS 26 reads the icon from the manifest, so this is where it shows. -->
+     icon comes out generic. iOS 26 reads the icon from the manifest, so this is where it shows.
+     apple-touch-icon.png is the packaged opaque app icon (dark background): Safari captures it
+     from this link before JS runs. Do not point it at a white-on-transparent Admin logo. -->
 <link rel="manifest" href="manifest.json" crossorigin="use-credentials">
-<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" href="icon-180.png">
 </head>
 <body>

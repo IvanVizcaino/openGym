@@ -229,6 +229,13 @@ export default function Home() {
       </div>
     )}
 
+    {isAthlete(user) && <div className="card tap-host">
+      <CardHead icon="note" tint="var(--acc)" title={t('Diet')}
+        sub={typeof S.diet === 'string' && S.diet.trim() ? t('Set by your coach') : t('Your coach has not set a diet yet.')}
+        open={{ onClick: () => nav('/diet') }}
+        action={<Icon name="chevronRight" className="chev" />} />
+    </div>}
+
     {on('body') && S.showWeightCard !== false && <div className="card">
       {/* one trailing action, Log; the goal lives with the goal line and the weigh-ins below (P2) */}
       <CardHead icon="scale" tint="var(--teal)" title={t('Body weight')} className="bw-head"
@@ -255,15 +262,22 @@ export default function Home() {
         {/* the weekly rate and, with one set, how it sits in its corridor (#759) */}
         <WeightRate S={S} />
         {/* every weigh-in, week by week with its average (Discord 'Weight') */}
-        <div className="row between" style={{ marginTop: 4 }}>
+        <div className="row between" style={{ marginTop: 4, flexWrap: 'wrap', gap: 4 }}>
           <Button size="sm" variant="ghost" icon="target" className="bw-goal" style={S.targetW ? { color: 'var(--gold-ink)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
-          <Button size="sm" variant="ghost" trailingIcon="chevronRight" data-tour="home-weighins" onClick={weighInsSheet}>{t('All weigh-ins')}</Button>
+          <div className="row" style={{ gap: 4, marginInlineStart: 'auto' }}>
+            <Button size="sm" variant="ghost" icon="camera" onClick={() => nav('/progress-photos')}>{t('Photos')}</Button>
+            <Button size="sm" variant="ghost" trailingIcon="chevronRight" data-tour="home-weighins" onClick={weighInsSheet}>{t('All weigh-ins')}</Button>
+          </div>
         </div>
       </> : <>
         <div className="muted small">{S.weighIn === false
           ? t('No weigh-ins yet. Log your weight to start the curve.')
           : t("No weigh-ins yet. Log your weight to start the curve (we also ask before every workout).")}</div>
-        <Button size="sm" variant="ghost" icon="target" className="bw-goal" style={{ marginTop: 6, ...(S.targetW ? { color: 'var(--gold-ink)' } : {}) }} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
+        <div className="muted small" style={{ marginTop: 4 }}>{t('You can add body photos when you log your weight.')}</div>
+        <div className="row" style={{ marginTop: 6, gap: 8, flexWrap: 'wrap' }}>
+          <Button size="sm" variant="ghost" icon="target" className="bw-goal" style={S.targetW ? { color: 'var(--gold-ink)' } : undefined} onClick={goalSheet}>{S.targetW ? fmtNum(S.targetW) : t('Goal')}</Button>
+          <Button size="sm" variant="ghost" icon="camera" onClick={() => nav('/progress-photos')}>{t('Photos')}</Button>
+        </div>
       </>}
     </div>}
 

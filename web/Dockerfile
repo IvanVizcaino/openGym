@@ -21,6 +21,9 @@ RUN npm ci --ignore-scripts
 COPY api/coach/core/ /app/api/coach/core/
 # The plan rule an athlete's device keeps, the same file the server runs (frontend/src/lib/team.js).
 COPY api/team-plan.js /app/api/team-plan.js
+# Fuerza a Docker a invalidar la caché a partir de este punto en cada despliegue
+ARG CACHEBUST=1
+RUN echo "Invalidating cache ID: $CACHEBUST"
 COPY frontend/ ./
 # Which build this is, shown in the app as "1.3.8+<build>" next to the version. Without it every
 # image built between two releases calls itself the same thing, and "which build are you running?"
@@ -76,10 +79,17 @@ COPY web/nginx.conf.template /etc/nginx/templates/default.conf.template
 # of a server that 404s under the prefix. nginx's entrypoint runs these scripts in order; 05 is
 # before the template rendering at 20.
 COPY --chmod=755 web/05-check-base-path.sh /docker-entrypoint.d/
+# Rewrites <title> / og:title in index.html from SITE_NAME before nginx starts (10 < 20).
+COPY --chmod=755 web/10-site-name.sh /docker-entrypoint.d/
 COPY --from=build /app/frontend/dist /usr/share/nginx/html
 # The exercise stills and animations, 180 px, licensed from Gym visual for openGym only: see
 # catalogue/media/NOTICE.md. They ship inside the image; nothing is downloaded at start-up.
 COPY catalogue/media/ /usr/share/nginx/html/exercise-media/
+# 10-site-name.sh rewrites <title> / og:* at start as uid 101; COPY leaves root ownership.
+USER root
+RUN chown nginx:root /usr/share/nginx/html/index.html \
+ && chmod u+w /usr/share/nginx/html/index.html
+USER 101
 
 # Set Default ENVs for nginx
 ENV NGINX_PORT=80

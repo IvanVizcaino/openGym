@@ -80,7 +80,9 @@ const LABELS = {
   'admin.site.logo.remove': 'Removed the site logo',
   'team.assign': 'A coach assigned routines',
   'team.unassign': 'A coach took a routine out of a plan',
+  'team.routine': 'A coach edited an athlete’s routine',
   'team.week': 'A coach changed an athlete’s week',
+  'team.diet': 'A coach changed an athlete’s diet',
   'team.invite.create': 'A coach created an athlete invite',
   'team.invite.revoke': 'A coach revoked an athlete invite',
   // FIRST_USER_ADMIN=1: the first profile on a fresh instance is made admin as it signs up.

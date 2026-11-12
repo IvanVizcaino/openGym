@@ -10,7 +10,7 @@ export const ROLES = ['coach', 'athlete'];
 // What the coach owns in an athlete's document. `queue` is left to the athlete while a rotation
 // is set (the app starts the next pass when a workout lands, lib/rotation.js); without one it is a
 // planner's week and the coach's too.
-export const PLAN_FIELDS = ['routines', 'week', 'dayPlan', 'programmes', 'programme', 'rotation', 'scheduleMode'];
+export const PLAN_FIELDS = ['routines', 'week', 'dayPlan', 'programmes', 'programme', 'rotation', 'scheduleMode', 'diet'];
 const PER_KEY_PLAN = new Set(['week', 'dayPlan', 'programmes']);
 const ORDER_KEY = 'routineOrder';
 export const WEEK_DAYS = ['0', '1', '2', '3', '4', '5', '6'];   // getDay() indexes, as the app keys `week`

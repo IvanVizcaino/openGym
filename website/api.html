@@ -248,7 +248,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <p class="api-facts">
     <span>OpenAPI 3.1.0</span>
     <span>openGym v1.4.3</span>
-    <span>105 endpoints</span>
+    <span>109 endpoints</span>
     <span>AGPL-3.0-or-later</span>
   </p>
 
@@ -373,6 +373,28 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="prow rrow">
     <span class="r-code s4">404</span>
     <span class="p-desc">No logo set.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-siteManifest">
+  <summary>
+    <span class="m get">GET</span>
+    <span class="ep-path"><code>/api/site/manifest</code><span class="ep-chip public">public</span></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">The PWA manifest</span>
+  </summary>
+  <div class="ep-body">
+<p>Public. <code>name</code> / <code>short_name</code> follow Admin → Site (or <code>SITE_NAME</code>). Icons are the packaged opaque app icons (<code>apple-touch-icon.png</code>, <code>icon-512.png</code>), not the Admin logo (a white mark on transparency vanishes on iOS). Also served as <code>/manifest.json</code> by the web container so <code>start_url</code> and icon paths stay relative to the app root.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Public: no authentication required.</span></p>
+
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">A Web App Manifest.<span class="r-sig">object</span></span>
   </div>
     </div>
   </div>
@@ -3088,7 +3110,7 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
     <div class="ptab">
   <div class="prow rrow">
     <span class="r-code s2">200</span>
-    <span class="p-desc">The plan (<code>routines</code>, <code>week</code> by getDay() number, <code>programme</code>, <code>rotation</code>) and what the stats are drawn from (<code>workouts</code> without photos and videos, <code>bodyweight</code>, <code>measurements</code>, <code>exWeights</code>, <code>customEx</code>).<span class="r-sig">object</span></span>
+    <span class="p-desc">The plan (<code>routines</code>, <code>week</code> by getDay() number, <code>programme</code>, <code>rotation</code>, <code>diet</code>) and what the stats / Body tab are drawn from (<code>workouts</code> with progress <code>media</code>, <code>bodyweight</code>, <code>measurements</code>, <code>dayPhotos</code>, <code>exWeights</code>, <code>customEx</code>).<span class="r-sig">object</span></span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">401</span>
@@ -3105,6 +3127,51 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="prow rrow">
     <span class="r-code s5">503</span>
     <span class="p-desc">The athlete's document cannot be read.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-teamMedia">
+  <summary>
+    <span class="m get">GET</span>
+    <span class="ep-path"><code>/api/team/media/{hash}</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Coach: one progress photo of an athlete</span>
+  </summary>
+  <div class="ep-body">
+<p>Bytes of a file referenced in the athlete's <code>dayPhotos</code> or workout <code>media</code>. The hash must be referenced; set-form videos are not exposed.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+<p class="ep-h">Query parameters</p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">hash <span class="p-hint">(path)</span><em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">athlete<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">The image or video.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Signed in, but not an admin. The attempt is recorded in the audit log.<span class="r-sig"><code>{&quot;error&quot;:&quot;forbidden&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">404</span>
+    <span class="p-desc">No such athlete, hash not referenced, or file missing.</span>
   </div>
     </div>
   </div>
@@ -3213,6 +3280,84 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   </div>
 </details>
 
+<details class="ep" id="op-teamRoutine">
+  <summary>
+    <span class="m put">PUT</span>
+    <span class="ep-path"><code>/api/team/routine</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Coach: edit a routine already in an athlete's plan</span>
+  </summary>
+  <div class="ep-body">
+<p>Updates the copy in the athlete's plan (name, exercises, progression, …) without re-assigning from the coach's library. The copy keeps its id and coach tag. Custom exercises the routine uses go along.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">athlete<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">routine<em class="p-req" title="required">required</em></span>
+    <span class="p-type">object</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">routine.id<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">routine.name</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">routine.emoji</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">routine.prog</span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">routine.ex</span>
+    <span class="p-type">object[]</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">The plan as it now stands.<span class="r-sig">{ ok: boolean, plan: object }</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">No routine body.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Signed in, but not an admin. The attempt is recorded in the audit log.<span class="r-sig"><code>{&quot;error&quot;:&quot;forbidden&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">404</span>
+    <span class="p-desc">No such athlete or routine.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">The athlete's document cannot be read.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
 <details class="ep" id="op-teamWeek">
   <summary>
     <span class="m put">PUT</span>
@@ -3245,6 +3390,59 @@ main.api-main .lead { color: var(--fg-2); max-width: 58ch; margin: 14px 0 0; fon
   <div class="prow rrow">
     <span class="r-code s4">400</span>
     <span class="p-desc">No week.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">401</span>
+    <span class="p-desc">No session, expired/revoked session, or a disabled account.<span class="r-sig"><code>{&quot;error&quot;:&quot;not signed in&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">403</span>
+    <span class="p-desc">Signed in, but not an admin. The attempt is recorded in the audit log.<span class="r-sig"><code>{&quot;error&quot;:&quot;forbidden&quot;}</code></span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">404</span>
+    <span class="p-desc">No such athlete.</span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s5">503</span>
+    <span class="p-desc">The athlete's document cannot be read.</span>
+  </div>
+    </div>
+  </div>
+</details>
+
+<details class="ep" id="op-teamDiet">
+  <summary>
+    <span class="m put">PUT</span>
+    <span class="ep-path"><code>/api/team/diet</code></span>
+    <span class="ep-chev" aria-hidden="true"></span>
+    <span class="ep-sum">Coach: set an athlete's recommended diet</span>
+  </summary>
+  <div class="ep-body">
+<p>HTML from the coach's simple rich editor (or legacy Markdown). The athlete can only read it. Empty string clears it. Cap 50 000 characters. Locked on the athlete's own <code>PUT /api/data</code> like the rest of the plan.</p>
+    <p class="ep-auth"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><span>Requires a session: the cookie set at sign-in, or <code>Authorization: Bearer &lt;token&gt;</code> from mobile-app pairing.</span></p>
+
+<p class="ep-h">Request body <span class="p-hint">(JSON)</span></p><div class="ptab">
+  <div class="prow">
+    <span class="p-name">athlete<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+  <div class="prow">
+    <span class="p-name">diet<em class="p-req" title="required">required</em></span>
+    <span class="p-type">string</span>
+    <span class="p-desc"></span>
+  </div>
+</div>
+    <p class="ep-h">Responses</p>
+    <div class="ptab">
+  <div class="prow rrow">
+    <span class="r-code s2">200</span>
+    <span class="p-desc">The plan as it now stands (includes <code>diet</code>).<span class="r-sig">{ ok: boolean, plan: object }</span></span>
+  </div>
+  <div class="prow rrow">
+    <span class="r-code s4">400</span>
+    <span class="p-desc">No diet string.</span>
   </div>
   <div class="prow rrow">
     <span class="r-code s4">401</span>
