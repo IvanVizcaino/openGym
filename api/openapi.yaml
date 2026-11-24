@@ -3564,6 +3564,64 @@ paths:
             application/json:
               schema: { $ref: '#/components/schemas/Error' }
 
+  /api/team/activity:
+    get:
+      tags: [team]
+      operationId: teamActivity
+      summary: 'Coach: recent finished workouts of the athletes this coach is linked to'
+      responses:
+        '200':
+          description: >-
+            The newest sessions first, at most 50. `unread` is how many were recorded after
+            this coach last called POST /api/team/activity/seen.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id: { type: string }
+                        athleteId: { type: string }
+                        athleteName: { type: string }
+                        workoutId: { type: string }
+                        name: { type: ['string', 'null'] }
+                        date: { type: ['string', 'null'] }
+                        endedAt: { type: ['string', 'null'] }
+                        durationMin: { type: ['integer', 'null'] }
+                        sets: { type: integer }
+                        volume: { type: number }
+                        unit: { type: string, enum: [kg, lb] }
+                        at: { type: integer, description: When the server recorded the finish, in ms. }
+                        coaches:
+                          type: array
+                          items: { type: string }
+                  unread: { type: integer }
+                  seenAt: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
+  /api/team/activity/seen:
+    post:
+      tags: [team]
+      operationId: teamActivitySeen
+      summary: "Coach: mark the activity feed as seen"
+      responses:
+        '200':
+          description: The timestamp stored as this coach's last seen time.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  ok: { type: boolean }
+                  seenAt: { type: integer }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+
   /api/admin/invites:
     get:
       tags: [admin]

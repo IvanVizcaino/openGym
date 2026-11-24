@@ -3802,4 +3802,12 @@ export default {
   "Breakfast, lunch, snacks…": "فطور، غداء، وجبات خفيفة…",
   "Underline": "تسطير",
   "Numbered list": "قائمة مرقمة",
+  // --- coach activity feed ---
+  'Recent activity': 'النشاط الأخير',
+  'No recent workouts yet.': 'لا توجد تمارين حديثة بعد.',
+  'Notify me when an athlete finishes': 'أخبرني عندما ينتهي رياضي',
+  'A push on this device when someone you coach finishes a session.': 'إشعار على هذا الجهاز عندما ينهي أحد من تدربهم حصة.',
+  '{0} finished {1}': '{0} أنهى {1}',
+  'a workout': 'تمرينًا',
+  '{0} new': '{0} جديد',
 }

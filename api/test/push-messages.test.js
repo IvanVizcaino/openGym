@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dayReminderPush, restTimerPush, routineEmoji, testPush } from '../push-messages.js';
+import { dayReminderPush, restTimerPush, routineEmoji, testPush, workoutFinishedPush } from '../push-messages.js';
 
 test('localizes every server-generated notification in pt-BR', () => {
   assert.deepEqual(restTimerPush('pt-BR'), {
@@ -47,4 +47,20 @@ test('leaves a literal emoji alone and falls back for anything else', () => {
   assert.equal(routineEmoji('trophy'), '🏋️');
   assert.equal(routineEmoji(''), '🏋️');
   assert.equal(routineEmoji(undefined), '🏋️');
+});
+
+test('localizes a finished-workout push in es and pt-BR, and falls back to English', () => {
+  const data = { athlete: 'Ana', routine: 'Push', durationMin: 45, sets: 12, volume: 480, unit: 'kg' };
+  const extra = { tag: 'workout-finished:a1:w1', url: '#/team/a1' };
+  assert.deepEqual(workoutFinishedPush('es', data, extra), {
+    title: 'Ana ha terminado Push',
+    body: '45 min · 12 series · 480 kg',
+    tag: 'workout-finished:a1:w1',
+    url: '#/team/a1',
+  });
+  assert.equal(workoutFinishedPush('pt-BR', data).title, 'Ana terminou Push');
+  assert.match(workoutFinishedPush('pt-BR', data).body, /séries/);
+  assert.equal(workoutFinishedPush('pt', data).title, 'Ana terminou Push', 'pt falls back to pt-BR');
+  assert.equal(workoutFinishedPush('fr', data).title, 'Ana finished Push');
+  assert.equal(workoutFinishedPush(undefined, { durationMin: 10, sets: 3, volume: 100 }).title, 'openGym finished a workout');
 });

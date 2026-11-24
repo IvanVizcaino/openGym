@@ -3747,4 +3747,12 @@ export default {
   "Breakfast, lunch, snacks…": "नाश्ता, दोपहर का खाना, स्नैक्स…",
   "Underline": "रेखांकित",
   "Numbered list": "क्रम सूची",
+  // --- coach activity feed ---
+  'Recent activity': 'हाल की गतिविधि',
+  'No recent workouts yet.': 'अभी कोई हालिया वर्कआउट नहीं है।',
+  'Notify me when an athlete finishes': 'जब कोई एथलीट पूरा करे तो सूचित करें',
+  'A push on this device when someone you coach finishes a session.': 'जब कोई खिलाड़ी जिसका आप कोच हैं सेशन पूरा करे, तो इस डिवाइस पर सूचना।',
+  '{0} finished {1}': '{0} ने {1} पूरा किया',
+  'a workout': 'एक वर्कआउट',
+  '{0} new': '{0} नए',
 }

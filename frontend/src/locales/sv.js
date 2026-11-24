@@ -3794,4 +3794,12 @@ export default {
   "Breakfast, lunch, snacks…": "Frukost, lunch, snacks…",
   "Underline": "Understrykning",
   "Numbered list": "Numrerad lista",
+  // --- coach activity feed ---
+  'Recent activity': 'Senaste aktivitet',
+  'No recent workouts yet.': 'Inga nya träningspass ännu.',
+  'Notify me when an athlete finishes': 'Meddela mig när en atlet är klar',
+  'A push on this device when someone you coach finishes a session.': 'En notis på den här enheten när någon du coachar avslutar ett pass.',
+  '{0} finished {1}': '{0} avslutade {1}',
+  'a workout': 'ett pass',
+  '{0} new': '{0} nya',
 }

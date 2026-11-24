@@ -35,7 +35,7 @@ async function loadSW() {
     addEventListener: (type, fn) => { handlers[type] = fn },
     skipWaiting: () => { skipWaiting++ },
     clients: { claim: async () => {}, matchAll: async () => [], openWindow: async () => {} },
-    registration: { getNotifications: async () => [], showNotification: async () => {}, pushManager: {} }
+    registration: { scope: 'https://gym.test/', getNotifications: async () => [], showNotification: async () => {}, pushManager: {} }
   }
   globalThis.location = { origin: 'https://gym.test' }
   globalThis.caches = new FakeCaches()
@@ -219,5 +219,42 @@ describe('sw.js re-registers a rotated push subscription with the page\'s device
     await fire('activate')
     expect((await globalThis.caches.keys()).sort()).toEqual([CACHE, DEVICE_CACHE].sort())
     expect(await (await (await globalThis.caches.open(DEVICE_CACHE)).match(DEVICE_URL)).text()).toBe('dev1234abcd')
+  })
+})
+
+describe('sw.js notification click', () => {
+  it('stores data.url on the notification and opens a safe hash route', async () => {
+    await loadSW()
+    const shown = []
+    globalThis.self.registration.showNotification = async (title, opts) => { shown.push({ title, opts }) }
+    const opened = []
+    globalThis.self.clients.openWindow = async url => { opened.push(url) }
+    await fire('push', { data: { json: () => ({ title: 'Ana ha terminado Push', body: '45 min', tag: 'workout-finished:a1:w1', url: '#/team/a1' }) } })
+    expect(shown[0].opts.data.url).toBe('#/team/a1')
+    await fire('notificationclick', { notification: { close() {}, data: shown[0].opts.data } })
+    expect(opened).toEqual(['./#/team/a1'])
+  })
+
+  it('a click with no url still opens the app, and a hostile url is ignored', async () => {
+    await loadSW()
+    const opened = []
+    globalThis.self.clients.openWindow = async url => { opened.push(url) }
+    await fire('notificationclick', { notification: { close() {}, data: {} } })
+    await fire('notificationclick', { notification: { close() {}, data: { url: 'https://evil.example/' } } })
+    await fire('notificationclick', { notification: { close() {}, data: { url: 'javascript:alert(1)' } } })
+    await fire('notificationclick', { notification: { close() {}, data: { url: '#/coach' } } })
+    expect(opened).toEqual(['./', './', './', './#/coach'])
+  })
+
+  it('focuses an already-open window and navigates it when the API exists', async () => {
+    await loadSW()
+    const nav = []
+    const client = { focus: async () => client, navigate: async href => { nav.push(href); return client } }
+    globalThis.self.clients.matchAll = async () => [client]
+    const opened = []
+    globalThis.self.clients.openWindow = async url => { opened.push(url) }
+    await fire('notificationclick', { notification: { close() {}, data: { url: '#/team/a1' } } })
+    expect(opened).toEqual([])
+    expect(nav).toEqual(['https://gym.test/#/team/a1'])
   })
 })

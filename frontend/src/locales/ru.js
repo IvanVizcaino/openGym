@@ -3751,4 +3751,12 @@ export default {
   "Breakfast, lunch, snacks…": "Завтрак, обед, перекусы…",
   "Underline": "Подчёркнутый",
   "Numbered list": "Нумерованный список",
+  // --- coach activity feed ---
+  'Recent activity': 'Недавняя активность',
+  'No recent workouts yet.': 'Пока нет недавних тренировок.',
+  'Notify me when an athlete finishes': 'Уведомить, когда спортсмен завершит тренировку',
+  'A push on this device when someone you coach finishes a session.': 'Уведомление на этом устройстве, когда кто-то из ваших атлетов завершает тренировку.',
+  '{0} finished {1}': '{0} завершил {1}',
+  'a workout': 'тренировку',
+  '{0} new': '{0} новых',
 }

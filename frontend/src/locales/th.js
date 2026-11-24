@@ -3758,4 +3758,12 @@ export default {
   "Breakfast, lunch, snacks…": "เช้า กลางวัน ของว่าง…",
   "Underline": "ขีดเส้นใต้",
   "Numbered list": "รายการเลข",
+  // --- coach activity feed ---
+  'Recent activity': 'กิจกรรมล่าสุด',
+  'No recent workouts yet.': 'ยังไม่มีวอร์กเอาต์ล่าสุด',
+  'Notify me when an athlete finishes': 'แจ้งเตือนเมื่อนักกีฬาส่งจบ',
+  'A push on this device when someone you coach finishes a session.': 'การแจ้งเตือนบนอุปกรณ์นี้เมื่อคนที่คุณโค้ชจบเซสชัน',
+  '{0} finished {1}': '{0} ทำ {1} เสร็จแล้ว',
+  'a workout': 'การออกกำลังกาย',
+  '{0} new': '{0} รายการใหม่',
 }

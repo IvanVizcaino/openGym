@@ -3750,4 +3750,12 @@ export default {
   "Breakfast, lunch, snacks…": "Reggeli, ebéd, nasi…",
   "Underline": "Aláhúzás",
   "Numbered list": "Számozott lista",
+  // --- coach activity feed ---
+  'Recent activity': 'Legutóbbi tevékenység',
+  'No recent workouts yet.': 'Még nincsenek friss edzések.',
+  'Notify me when an athlete finishes': 'Értesíts, ha egy sportoló befejezte',
+  'A push on this device when someone you coach finishes a session.': 'Értesítés ezen az eszközön, ha valaki, akit edzel, befejez egy edzést.',
+  '{0} finished {1}': '{0} befejezte: {1}',
+  'a workout': 'egy edzés',
+  '{0} new': '{0} új',
 }

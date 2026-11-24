@@ -3740,4 +3740,12 @@ export default {
   "Breakfast, lunch, snacks…": "早餐、午餐、點心…",
   "Underline": "底線",
   "Numbered list": "編號清單",
+  // --- coach activity feed ---
+  'Recent activity': '最近動態',
+  'No recent workouts yet.': '還沒有最近的訓練。',
+  'Notify me when an athlete finishes': '運動員完成訓練時通知我',
+  'A push on this device when someone you coach finishes a session.': '你指導的人完成一次訓練時，在此裝置上收到通知。',
+  '{0} finished {1}': '{0} 完成了 {1}',
+  'a workout': '一次訓練',
+  '{0} new': '{0} 則新動態',
 }
