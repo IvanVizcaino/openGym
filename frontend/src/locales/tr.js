@@ -3747,4 +3747,12 @@ export default {
   "Breakfast, lunch, snacks…": "Kahvaltı, öğle, atıştırmalık…",
   "Underline": "Altı çizili",
   "Numbered list": "Numaralı liste",
+  // --- coach activity feed ---
+  'Recent activity': 'Son etkinlik',
+  'No recent workouts yet.': 'Henüz yakın tarihli antrenman yok.',
+  'Notify me when an athlete finishes': 'Bir sporcu bitirdiğinde bana bildir',
+  'A push on this device when someone you coach finishes a session.': 'Çalıştırdığın biri seansı bitirdiğinde bu cihazda bir bildirim.',
+  '{0} finished {1}': '{0} şunu bitirdi: {1}',
+  'a workout': 'bir antrenman',
+  '{0} new': '{0} yeni',
 }

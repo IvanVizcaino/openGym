@@ -79,3 +79,60 @@ export function nudgePush(lang, tone, routine, iso) {
   const name = routine?.name || 'openGym';
   return { title: copy.title, body: line.replace('{0}', () => name), tag: 'nudge' };
 }
+
+const WORKOUT_COPY = {
+  en: {
+    finishedTitle: '{0} finished {1}',
+    sessionFallback: 'a workout',
+    min: '{0} min',
+    sets: '{0} sets',
+  },
+  es: {
+    finishedTitle: '{0} ha terminado {1}',
+    sessionFallback: 'un entrenamiento',
+    min: '{0} min',
+    sets: '{0} series',
+  },
+  'pt-BR': {
+    finishedTitle: '{0} terminou {1}',
+    sessionFallback: 'um treino',
+    min: '{0} min',
+    sets: '{0} séries',
+  },
+};
+
+const workoutCopyFor = lang => {
+  if (WORKOUT_COPY[lang]) return WORKOUT_COPY[lang];
+  const base = typeof lang === 'string' ? lang.split('-')[0] : '';
+  if (base === 'pt') return WORKOUT_COPY['pt-BR'];
+  return WORKOUT_COPY[base] || WORKOUT_COPY.en;
+};
+
+const fmtVol = (volume, unit) => {
+  const n = typeof volume === 'number' && Number.isFinite(volume) ? Math.round(volume * 10) / 10 : null;
+  if (n == null) return null;
+  return `${n} ${unit === 'lb' ? 'lb' : 'kg'}`;
+};
+
+/** Push when an athlete finishes a session. `tag` and `url` are filled in by the caller. */
+export function workoutFinishedPush(lang, { athlete, routine, durationMin, sets, volume, unit } = {}, { tag, url } = {}) {
+  const copy = workoutCopyFor(lang);
+  const who = (typeof athlete === 'string' && athlete.trim()) ? athlete.trim().slice(0, 80) : 'openGym';
+  const what = (typeof routine === 'string' && routine.trim()) ? routine.trim().slice(0, 80) : copy.sessionFallback;
+  const parts = [];
+  if (typeof durationMin === 'number' && Number.isFinite(durationMin) && durationMin >= 0) {
+    parts.push(copy.min.replace('{0}', String(Math.round(durationMin))));
+  }
+  if (typeof sets === 'number' && Number.isFinite(sets)) {
+    parts.push(copy.sets.replace('{0}', String(Math.round(sets))));
+  }
+  const vol = fmtVol(volume, unit);
+  if (vol) parts.push(vol);
+  const out = {
+    title: copy.finishedTitle.replace('{0}', () => who).replace('{1}', () => what),
+    body: parts.join(' · '),
+    tag: tag || 'workout-finished',
+  };
+  if (typeof url === 'string' && url) out.url = url;
+  return out;
+}

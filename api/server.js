@@ -47,6 +47,7 @@ import {
   ROLES, roleOf as teamRoleOf, lockPlan, planOf, assignRoutines, updateRoutine, removeRoutine, setWeek, setDiet, athleteRow,
   parseLogo, logoMime, cleanSiteName
 } from './team.js';
+import { createTeamNotify } from './team-notify.js';
 
 const PORT = +(process.env.PORT || 3000);
 const DATA = process.env.DATA_DIR || '/data';
@@ -2152,6 +2153,15 @@ function dataWritable() {
   return ok;
 }
 
+const teamNotify = createTeamNotify({
+  dataDir: DATA,
+  users: () => db.users,
+  invites: () => db.invites,
+  isCoach,
+  readState: uid => readStateCached(uid) || {},
+  sendPush,
+});
+
 const routes = {
   // 503 rather than a flag in a 200: the container healthcheck is `wget --spider`, which reads
   // the status and nothing else, and an instance that cannot write its data directory is exactly
@@ -2709,6 +2719,9 @@ const routes = {
     // A finished workout, a record or a weigh-in the profile's integrations asked to hear about:
     // queued for delivery (integrations/outbox.js), never sent from inside this request.
     try { integrations.onStateWrite(user.id, cur, body.state); } catch (e) { console.error('integrations onStateWrite', e); }
+    // A finished workout by an athlete: record it on the coach feed and, when it is not a
+    // backfill, send a Web Push to the coaches who plan for them (team-notify.js).
+    try { teamNotify.onStateWrite(user, cur, body.state); } catch (e) { console.error('teamNotify onStateWrite', e); }
     json(res, 200, { ok: true, ts: body.state._ts || null, rev: curRev + 1, wid: body.state._wid });
   },
 
@@ -3139,6 +3152,14 @@ const routes = {
   },
 
   /* ---------- coaches and athletes (team.js) ---------- */
+  'GET /api/team/activity': async (req, res) => {
+    const coach = requireCoach(req, res); if (!coach) return;
+    json(res, 200, teamNotify.listFor(coach.id));
+  },
+  'POST /api/team/activity/seen': async (req, res) => {
+    const coach = requireCoach(req, res); if (!coach) return;
+    json(res, 200, teamNotify.markSeen(coach.id));
+  },
   'GET /api/team/athletes': async (req, res) => {
     if (!requireCoach(req, res)) return;
     const athletes = db.users.filter(u => !isCoach(u)).map(u => athleteRow(u, readStateCached(u.id) || {}));

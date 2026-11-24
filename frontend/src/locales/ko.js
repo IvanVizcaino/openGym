@@ -3747,4 +3747,12 @@ export default {
   "Breakfast, lunch, snacks…": "아침, 점심, 간식…",
   "Underline": "밑줄",
   "Numbered list": "번호 목록",
+  // --- coach activity feed ---
+  'Recent activity': '최근 활동',
+  'No recent workouts yet.': '최근 운동이 아직 없습니다.',
+  'Notify me when an athlete finishes': '선수가 운동을 마치면 알림',
+  'A push on this device when someone you coach finishes a session.': '코칭하는 사람이 세션을 마치면 이 기기로 알림이 옵니다.',
+  '{0} finished {1}': '{0} 님이 {1}을(를) 마쳤습니다',
+  'a workout': '운동',
+  '{0} new': '{0}개 새 알림',
 }

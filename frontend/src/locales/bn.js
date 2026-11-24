@@ -3826,4 +3826,12 @@ export default {
   "Breakfast, lunch, snacks…": "সকালের নাস্তা, দুপুরের খাবার, স্ন্যাকস…",
   "Underline": "আন্ডারলাইন",
   "Numbered list": "নম্বর তালিকা",
+  // --- coach activity feed ---
+  'Recent activity': 'সাম্প্রতিক কার্যকলাপ',
+  'No recent workouts yet.': 'এখনও কোনো সাম্প্রতিক ওয়ার্কআউট নেই।',
+  'Notify me when an athlete finishes': 'কোনো অ্যাথলিট শেষ করলে জানাবেন',
+  'A push on this device when someone you coach finishes a session.': 'আপনি যাকে কোচ করেন তিনি সেশন শেষ করলে এই ডিভাইসে একটি বিজ্ঞপ্তি।',
+  '{0} finished {1}': '{0} শেষ করেছে {1}',
+  'a workout': 'একটি ওয়ার্কআউট',
+  '{0} new': '{0} নতুন',
 }

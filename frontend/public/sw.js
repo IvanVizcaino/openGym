@@ -216,16 +216,39 @@ self.addEventListener('push', e => {
       icon: 'icon-512.png',
       badge: 'icon-180.png',
       tag,
-      renotify: true
+      renotify: true,
+      data: { url: typeof data.url === 'string' ? data.url : undefined },
     })
   })())
 })
+// A push payload can name a hash route (`#/team/…`, `#/coach`). Only that shape is honoured:
+// anything else (an absolute URL, javascript:) opens the app as before, so a compromised
+// subscription cannot steer the click off-origin. Rest-timer and test pushes have no url
+// and keep the old behaviour: focus a window already open, or open `./`.
+function notificationTarget(url) {
+  if (typeof url !== 'string') return './'
+  let hash = url.trim()
+  if (!hash || hash === './' || hash === '.' || hash === '/') return './'
+  if (hash.startsWith('./')) hash = hash.slice(1)
+  if (hash.startsWith('/#')) hash = hash.slice(1)
+  if (/^#\/[A-Za-z0-9_/?#&=%.-]*$/.test(hash)) return './' + hash
+  return './'
+}
 self.addEventListener('notificationclick', e => {
   e.notification.close()
-  e.waitUntil(self.clients.matchAll({ type: 'window' }).then(clients => {
-    const c = clients.find(c => 'focus' in c)
-    return c ? c.focus() : self.clients.openWindow('./')
-  }))
+  const dest = notificationTarget(e.notification?.data?.url)
+  e.waitUntil((async () => {
+    const clients = await self.clients.matchAll({ type: 'window', includeUncontrolled: true })
+    const c = clients.find(x => 'focus' in x)
+    if (c) {
+      await c.focus()
+      if (dest !== './' && typeof c.navigate === 'function') {
+        try { await c.navigate(new URL(dest, self.registration.scope).href) } catch { /* stay on the focused window */ }
+      }
+      return
+    }
+    await self.clients.openWindow(dest)
+  })())
 })
 // The push service rotated the subscription (key change, expiry): subscribe again with the same
 // server key and tell the server, so the row it holds keeps pointing at this browser. With the

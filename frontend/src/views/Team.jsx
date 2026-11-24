@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { api, apiBlob, remoteAuth } from '../lib/api.js'
 import { inviteLink } from '../lib/invite-link.js'
-import { t } from '../lib/i18n.js'
+import { t, tn } from '../lib/i18n.js'
 import { DAYS, DAYN, weekOrder, weekStartOf, fmtDate, fmtDur, fmtNum, fmtVol, exCount, todayISO, exerciseNameText } from '../lib/format.js'
 import { workoutVolume, setsDone } from '../lib/history.js'
 import { bestSetOf } from '../lib/onerm.js'
@@ -20,7 +20,7 @@ import EmptyState from '../components/EmptyState.jsx'
 import LineChart from '../components/LineChart.jsx'
 import DietView from '../components/DietView.jsx'
 import RichText from '../components/RichText.jsx'
-import { Button, Segmented } from '../components/ui.jsx'
+import { Button, Segmented, Switch, Row } from '../components/ui.jsx'
 import { looksLikeHtml, isEmptyHtml, sanitizeHtml } from '../lib/safe-html.js'
 import { mdHtml } from '../lib/md.js'
 
@@ -115,6 +115,83 @@ function InvitesCard() {
   </div>
 }
 
+
+const ACTIVITY_POLL_MS = 60_000
+
+function useTeamActivity(enabled) {
+  const [activity, setActivity] = useState(null)
+  const [fresh, setFresh] = useState(() => new Set())
+  useEffect(() => {
+    if (!enabled) return
+    let stop = false
+    const tick = () => api('/api/team/activity').then(d => {
+      if (stop) return
+      setActivity(d)
+      if (d.unread) {
+        setFresh(prev => {
+          const n = new Set(prev)
+          for (const it of d.items) if ((it.at || 0) > (d.seenAt || 0)) n.add(it.id)
+          return n
+        })
+        api('/api/team/activity/seen', { method: 'POST', body: '{}' }).catch(() => {})
+      }
+    }).catch(() => { if (!stop) setActivity(a => a || { items: [], unread: 0 }) })
+    tick()
+    const onVis = () => { if (document.visibilityState === 'visible') tick() }
+    document.addEventListener('visibilitychange', onVis)
+    window.addEventListener('focus', onVis)
+    const id = setInterval(() => { if (document.visibilityState === 'visible') tick() }, ACTIVITY_POLL_MS)
+    return () => {
+      stop = true
+      document.removeEventListener('visibilitychange', onVis)
+      window.removeEventListener('focus', onVis)
+      clearInterval(id)
+    }
+  }, [enabled])
+  return { activity, fresh }
+}
+
+function activityLine(it) {
+  return [
+    it.durationMin != null ? t('{0} min', it.durationMin) : null,
+    tn('{0} set', '{0} sets', it.sets || 0),
+    it.volume != null ? fmtVol(it.volume, it.unit || 'kg') : null,
+  ].filter(Boolean).join(' · ')
+}
+
+function TeamActivity({ items, fresh, nav }) {
+  const n = [...fresh].filter(id => items.some(it => it.id === id)).length
+  return <div className="team-act" style={{ margin: '4px 0 16px' }}>
+    <div className="team-act-h">
+      <h4 className="sec" style={{ margin: 0, flex: 1 }}>{t('Recent activity')}</h4>
+      {n > 0 && <span className="team-unread" aria-label={t('{0} new', n)}>{n}</span>}
+    </div>
+    {!items.length
+      ? <p className="sect-f" style={{ marginTop: 4 }}>{t('No recent workouts yet.')}</p>
+      : <div className="list">{items.map(it => <div key={it.id} className={'item' + (fresh.has(it.id) ? ' fresh' : '')} {...tappable(() => nav('/team/' + it.athleteId))}>
+          <span className="lrow-i"><Icon name="flag" /></span>
+          <div className="grow">
+            <div className="tt">{t('{0} finished {1}', it.athleteName, it.name || t('a workout'))}</div>
+            <div className="ss">{[it.date ? fmtDate(it.date, true) : null, activityLine(it)].filter(Boolean).join(' · ')}</div>
+          </div>
+          <Icon name="chevronRight" className="chev" />
+        </div>)}</div>}
+  </div>
+}
+
+function TeamNotifyRow() {
+  const on = useStore(s => s.S.teamNotify !== false)
+  const update = useStore(s => s.update)
+  return (
+    <div className="card" style={{ marginBottom: 14 }}>
+      <Row icon="bell" iconTint="var(--acc)" title={t('Notify me when an athlete finishes')}
+        subtitle={t('A push on this device when someone you coach finishes a session.')}>
+        <Switch checked={on} onChange={v => update(s => { s.teamNotify = v })} aria-label={t('Notify me when an athlete finishes')} />
+      </Row>
+    </div>
+  )
+}
+
 export default function Team() {
   const nav = useNavigate()
   const user = useStore(s => s.user)
@@ -123,6 +200,7 @@ export default function Team() {
   const [err, setErr] = useState(null)
   const load = () => api('/api/team/athletes').then(d => { setAthletes(d.athletes || []); setErr(null) }).catch(e => setErr(e.message))
   useEffect(() => { if (isCoach(user)) load() }, [])
+  const { activity, fresh } = useTeamActivity(isCoach(user))
   if (!isCoach(user)) return null
   const active = (athletes || []).filter(a => !a.disabled)
   const assign = () => openSheet(close => <AssignSheet athletes={active} close={close} done={load} />)
@@ -134,6 +212,8 @@ export default function Team() {
         <div className="sub">{athletes ? t('{0} athletes', active.length) : err || t('Loading…')}</div></div>
       <Button size="sm" variant="tinted" icon="clipboard" disabled={!active.length} onClick={assign}>{t('Assign')}</Button>
     </div>
+    <TeamNotifyRow />
+    {activity && <TeamActivity items={activity.items || []} fresh={fresh} nav={nav} />}
     {athletes && !active.length && <EmptyState icon="person" title={t('No athletes yet.')} text={t('Invite one below. Once they sign up you can plan their training here.')} />}
     {active.length > 0 && <div className="list">{active.map(a => <div key={a.id} className="item" {...tappable(() => nav('/team/' + a.id))}>
       <span className="lrow-i"><Icon name="person" /></span>

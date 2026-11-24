@@ -2536,6 +2536,10 @@ export const PT_BR_OVERRIDES = {
   "Breakfast, lunch, snacks…": "Café da manhã, almoço, lanches…",
   "Underline": "Sublinhado",
   "Numbered list": "Lista numerada",
+  // --- coach activity feed ---
+  'Notify me when an athlete finishes': 'Me avise quando um atleta terminar',
+  'A push on this device when someone you coach finishes a session.': 'Uma notificação neste dispositivo quando alguém que você treina termina uma sessão.',
+
 }
 
 export default { ...pt, ...PT_BR_OVERRIDES }

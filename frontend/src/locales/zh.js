@@ -3747,4 +3747,12 @@ export default {
   "Breakfast, lunch, snacks…": "早餐、午餐、加餐…",
   "Underline": "下划线",
   "Numbered list": "编号列表",
+  // --- coach activity feed ---
+  'Recent activity': '最近动态',
+  'No recent workouts yet.': '还没有最近的训练。',
+  'Notify me when an athlete finishes': '运动员完成训练时通知我',
+  'A push on this device when someone you coach finishes a session.': '你指导的人完成一次训练时，在此设备上收到通知。',
+  '{0} finished {1}': '{0} 完成了 {1}',
+  'a workout': '一次训练',
+  '{0} new': '{0} 条新动态',
 }

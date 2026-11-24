@@ -3747,4 +3747,12 @@ export default {
   "Breakfast, lunch, snacks…": "Petit-déj, déjeuner, snacks…",
   "Underline": "Souligné",
   "Numbered list": "Liste numérotée",
+  // --- coach activity feed ---
+  'Recent activity': 'Activité récente',
+  'No recent workouts yet.': 'Pas encore d’entraînements récents.',
+  'Notify me when an athlete finishes': 'Préviens-moi quand un athlète a terminé',
+  'A push on this device when someone you coach finishes a session.': 'Une notification sur cet appareil quand quelqu’un que tu coaches termine une séance.',
+  '{0} finished {1}': '{0} a terminé {1}',
+  'a workout': 'un entraînement',
+  '{0} new': '{0} nouveau',
 }
