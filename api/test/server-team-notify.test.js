@@ -119,3 +119,65 @@ test('a backfill is listed and an opted-out coach still sees the feed', async t 
   assert.equal(feed.body.items.length, 1);
   assert.equal(feed.body.items[0].workoutId, 'old');
 });
+
+const HASH = 'ab'.repeat(32);
+const HASH2 = 'cd'.repeat(32);
+const photoRef = (hash = HASH) => ({ kind: 'image', hash, mime: 'image/jpeg', size: 1200, width: 100, height: 100 });
+
+test('a progress photo on PUT /api/data is listed on the coach feed and not for an unlinked coach', async t => {
+  const h = await startServer(t);
+  const put = await h.call(ATHLETE, 'PUT', '/api/data', {
+    baseRev: 1, stamped: true,
+    state: {
+      unit: 'kg', workouts: [], routines: [],
+      dayPhotos: { [HASH]: { d: '2026-11-25', m: photoRef(), _ts: Date.now() } },
+    },
+  });
+  assert.equal(put.status, 200, JSON.stringify(put.body));
+
+  const feed = await h.call(COACH, 'GET', '/api/team/activity');
+  assert.equal(feed.status, 200);
+  assert.equal(feed.body.items.length, 1);
+  assert.equal(feed.body.items[0].type, 'body.photo');
+  assert.equal(feed.body.items[0].athleteId, ATHLETE);
+  assert.equal(feed.body.items[0].count, 1);
+  assert.equal(feed.body.items[0].thumb.hash, HASH);
+  assert.ok(!JSON.stringify(feed.body.items[0]).includes('mime'));
+
+  const other = await h.call(OTHER, 'GET', '/api/team/activity');
+  assert.equal(other.body.items.length, 0, 'an unlinked coach does not see Ana\'s photo');
+});
+
+test('several photos in one PUT are one feed row, and a re-sync does not add another', async t => {
+  const h = await startServer(t);
+  const state = {
+    unit: 'kg', workouts: [], routines: [],
+    dayPhotos: {
+      [HASH]: { d: '2026-11-25', m: photoRef(HASH), _ts: Date.now() },
+      [HASH2]: { d: '2026-11-25', m: photoRef(HASH2), _ts: Date.now() },
+    },
+  };
+  assert.equal((await h.call(ATHLETE, 'PUT', '/api/data', { baseRev: 1, stamped: true, state })).status, 200);
+  const rev = (await h.call(ATHLETE, 'GET', '/api/data/rev')).body.rev;
+  assert.equal((await h.call(ATHLETE, 'PUT', '/api/data', { baseRev: rev, stamped: true, state })).status, 200);
+  const feed = await h.call(COACH, 'GET', '/api/team/activity');
+  assert.equal(feed.body.items.length, 1);
+  assert.equal(feed.body.items[0].type, 'body.photo');
+  assert.equal(feed.body.items[0].count, 2);
+});
+
+test('a photo attached to a workout is also listed as body.photo', async t => {
+  const h = await startServer(t);
+  const end = Date.now() - 20_000;
+  const w = {
+    id: 'w-photo', d: new Date(end).toISOString().slice(0, 10), name: 'Push',
+    start: end - 45 * 60_000, end,
+    entries: [{ id: '0025', sets: [{ w: 60, r: 8, done: true }] }],
+    media: [photoRef()],
+  };
+  assert.equal((await h.call(ATHLETE, 'PUT', '/api/data', { baseRev: 1, stamped: true, state: { unit: 'kg', workouts: [w], routines: [] } })).status, 200);
+  const feed = await h.call(COACH, 'GET', '/api/team/activity');
+  const types = feed.body.items.map(it => it.type || 'workout.finished');
+  assert.ok(types.includes('body.photo'), JSON.stringify(types));
+  assert.ok(types.includes('workout.finished'), JSON.stringify(types));
+});

@@ -3752,6 +3752,12 @@ export default {
   'No recent workouts yet.': 'Henüz yakın tarihli antrenman yok.',
   'Notify me when an athlete finishes': 'Bir sporcu bitirdiğinde bana bildir',
   'A push on this device when someone you coach finishes a session.': 'Çalıştırdığın biri seansı bitirdiğinde bu cihazda bir bildirim.',
+  // --- coach activity: progress photos ---
+  "Notify me about my athletes": "Sporcularımın etkinliği hakkında bildir",
+  "A push on this device when someone you coach finishes a session or uploads a progress photo.": "Çalıştırdığın biri seansı bitirdiğinde veya bir ilerleme fotoğrafı yüklediğinde bu cihazda bir bildirim.",
+  "No recent activity yet.": "Henüz yakın tarihli etkinlik yok.",
+  "{0} uploaded a progress photo": "{0} bir ilerleme fotoğrafı yükledi",
+  "{0} uploaded {1} progress photos": "{0} {1} ilerleme fotoğrafı yükledi",
   '{0} finished {1}': '{0} şunu bitirdi: {1}',
   'a workout': 'bir antrenman',
   '{0} new': '{0} yeni',

@@ -136,3 +136,37 @@ export function workoutFinishedPush(lang, { athlete, routine, durationMin, sets,
   if (typeof url === 'string' && url) out.url = url;
   return out;
 }
+
+const PHOTO_COPY = {
+  en: {
+    oneTitle: '{0} uploaded a progress photo',
+    manyTitle: '{0} uploaded {1} progress photos',
+  },
+  es: {
+    oneTitle: '{0} ha subido una foto de progreso',
+    manyTitle: '{0} ha subido {1} fotos de progreso',
+  },
+  'pt-BR': {
+    oneTitle: '{0} enviou uma foto de progresso',
+    manyTitle: '{0} enviou {1} fotos de progresso',
+  },
+};
+
+const photoCopyFor = lang => {
+  if (PHOTO_COPY[lang]) return PHOTO_COPY[lang];
+  const base = typeof lang === 'string' ? lang.split('-')[0] : '';
+  if (base === 'pt') return PHOTO_COPY['pt-BR'];
+  return PHOTO_COPY[base] || PHOTO_COPY.en;
+};
+
+/** Push when an athlete uploads one or more progress photos. `tag` and `url` come from the caller. */
+export function bodyPhotoPush(lang, { athlete, count = 1, date } = {}, { tag, url } = {}) {
+  const copy = photoCopyFor(lang);
+  const who = (typeof athlete === 'string' && athlete.trim()) ? athlete.trim().slice(0, 80) : 'openGym';
+  const n = (typeof count === 'number' && Number.isFinite(count) && count > 0) ? Math.round(count) : 1;
+  const title = (n === 1 ? copy.oneTitle : copy.manyTitle).replace('{0}', () => who).replace('{1}', () => String(n));
+  const body = (typeof date === 'string' && /^\d{4}-\d{2}-\d{2}/.test(date)) ? date.slice(0, 10) : '';
+  const out = { title, body, tag: tag || 'body-photo' };
+  if (typeof url === 'string' && url) out.url = url;
+  return out;
+}

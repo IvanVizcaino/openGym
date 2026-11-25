@@ -3303,3 +3303,6 @@ button.wl-summary{width:100%;padding:0 0 10px;text-align:start;border-radius:var
 .team-act-h{display:flex;align-items:center;gap:8px;margin:16px 0 8px}
 .team-unread{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:99px;background:var(--acc);color:var(--on-acc);font-size:var(--fs-caption2);font-weight:700}
 .team-act .item.fresh{box-shadow:inset 3px 0 0 var(--acc)}
+.team-act-thumb{width:40px;height:40px;border-radius:8px;overflow:hidden;flex:none;background:var(--fill, rgba(127,127,127,.15));display:flex;align-items:center;justify-content:center}
+.team-act-thumb img{width:100%;height:100%;object-fit:cover;display:block}
+

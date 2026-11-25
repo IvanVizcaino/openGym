@@ -2539,6 +2539,12 @@ export const PT_BR_OVERRIDES = {
   // --- coach activity feed ---
   'Notify me when an athlete finishes': 'Me avise quando um atleta terminar',
   'A push on this device when someone you coach finishes a session.': 'Uma notificação neste dispositivo quando alguém que você treina termina uma sessão.',
+  // --- coach activity: progress photos ---
+  "Notify me about my athletes": "Avise-me sobre a atividade dos meus atletas",
+  "A push on this device when someone you coach finishes a session or uploads a progress photo.": "Uma notificação neste dispositivo quando alguém que você treina termina uma sessão ou envia uma foto de progresso.",
+  "No recent activity yet.": "Ainda não há atividade recente.",
+  "{0} uploaded a progress photo": "{0} enviou uma foto de progresso",
+  "{0} uploaded {1} progress photos": "{0} enviou {1} fotos de progresso",
 
 }
 

@@ -3763,6 +3763,12 @@ export default {
   'No recent workouts yet.': 'ยังไม่มีวอร์กเอาต์ล่าสุด',
   'Notify me when an athlete finishes': 'แจ้งเตือนเมื่อนักกีฬาส่งจบ',
   'A push on this device when someone you coach finishes a session.': 'การแจ้งเตือนบนอุปกรณ์นี้เมื่อคนที่คุณโค้ชจบเซสชัน',
+  // --- coach activity: progress photos ---
+  "Notify me about my athletes": "แจ้งเตือนกิจกรรมของนักกีฬาของฉัน",
+  "A push on this device when someone you coach finishes a session or uploads a progress photo.": "การแจ้งเตือนบนอุปกรณ์นี้เมื่อคนที่คุณโค้ชจบเซสชันหรืออัปโหลดรูปความคืบหน้า",
+  "No recent activity yet.": "ยังไม่มีกิจกรรมล่าสุด",
+  "{0} uploaded a progress photo": "{0} อัปโหลดรูปความคืบหน้าแล้ว",
+  "{0} uploaded {1} progress photos": "{0} อัปโหลดรูปความคืบหน้า {1} รูป",
   '{0} finished {1}': '{0} ทำ {1} เสร็จแล้ว',
   'a workout': 'การออกกำลังกาย',
   '{0} new': '{0} รายการใหม่',

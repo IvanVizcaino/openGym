@@ -3752,6 +3752,12 @@ export default {
   'No recent workouts yet.': 'Nie ma jeszcze ostatnich treningów.',
   'Notify me when an athlete finishes': 'Powiadom mnie, gdy zawodnik skończy',
   'A push on this device when someone you coach finishes a session.': 'Powiadomienie na tym urządzeniu, gdy ktoś, kogo trenujesz, skończy sesję.',
+  // --- coach activity: progress photos ---
+  "Notify me about my athletes": "Powiadom mnie o aktywności moich zawodników",
+  "A push on this device when someone you coach finishes a session or uploads a progress photo.": "Powiadomienie na tym urządzeniu, gdy ktoś, kogo trenujesz, skończy sesję lub doda zdjęcie postępów.",
+  "No recent activity yet.": "Nie ma jeszcze ostatniej aktywności.",
+  "{0} uploaded a progress photo": "{0} dodał zdjęcie postępów",
+  "{0} uploaded {1} progress photos": "{0} dodał {1} zdjęcia postępów",
   '{0} finished {1}': '{0} skończył {1}',
   'a workout': 'trening',
   '{0} new': '{0} nowe',

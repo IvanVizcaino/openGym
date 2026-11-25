@@ -3752,6 +3752,12 @@ export default {
   'No recent workouts yet.': 'Pas encore d’entraînements récents.',
   'Notify me when an athlete finishes': 'Préviens-moi quand un athlète a terminé',
   'A push on this device when someone you coach finishes a session.': 'Une notification sur cet appareil quand quelqu’un que tu coaches termine une séance.',
+  // --- coach activity: progress photos ---
+  "Notify me about my athletes": "Préviens-moi de l’activité de mes athlètes",
+  "A push on this device when someone you coach finishes a session or uploads a progress photo.": "Une notification sur cet appareil quand quelqu’un que tu coaches termine une séance ou envoie une photo de progression.",
+  "No recent activity yet.": "Pas encore d’activité récente.",
+  "{0} uploaded a progress photo": "{0} a envoyé une photo de progression",
+  "{0} uploaded {1} progress photos": "{0} a envoyé {1} photos de progression",
   '{0} finished {1}': '{0} a terminé {1}',
   'a workout': 'un entraînement',
   '{0} new': '{0} nouveau',
