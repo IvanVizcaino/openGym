@@ -3752,6 +3752,12 @@ export default {
   'No recent workouts yet.': '还没有最近的训练。',
   'Notify me when an athlete finishes': '运动员完成训练时通知我',
   'A push on this device when someone you coach finishes a session.': '你指导的人完成一次训练时，在此设备上收到通知。',
+  // --- coach activity: progress photos ---
+  "Notify me about my athletes": "通知我运动员的动态",
+  "A push on this device when someone you coach finishes a session or uploads a progress photo.": "你指导的人完成一次训练或上传进度照片时，在此设备上收到通知。",
+  "No recent activity yet.": "还没有最近的动态。",
+  "{0} uploaded a progress photo": "{0} 上传了一张进度照片",
+  "{0} uploaded {1} progress photos": "{0} 上传了 {1} 张进度照片",
   '{0} finished {1}': '{0} 完成了 {1}',
   'a workout': '一次训练',
   '{0} new': '{0} 条新动态',

@@ -3807,6 +3807,12 @@ export default {
   'No recent workouts yet.': 'لا توجد تمارين حديثة بعد.',
   'Notify me when an athlete finishes': 'أخبرني عندما ينتهي رياضي',
   'A push on this device when someone you coach finishes a session.': 'إشعار على هذا الجهاز عندما ينهي أحد من تدربهم حصة.',
+  // --- coach activity: progress photos ---
+  "Notify me about my athletes": "أعلمني بنشاط رياضيّي",
+  "A push on this device when someone you coach finishes a session or uploads a progress photo.": "إشعار على هذا الجهاز عندما ينهي أحد من تدربهم حصة أو يرفع صورة تقدم.",
+  "No recent activity yet.": "لا يوجد نشاط حديث بعد.",
+  "{0} uploaded a progress photo": "{0} رفع صورة تقدم",
+  "{0} uploaded {1} progress photos": "{0} رفع {1} صور تقدم",
   '{0} finished {1}': '{0} أنهى {1}',
   'a workout': 'تمرينًا',
   '{0} new': '{0} جديد',

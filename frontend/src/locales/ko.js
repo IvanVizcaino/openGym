@@ -3752,6 +3752,12 @@ export default {
   'No recent workouts yet.': '최근 운동이 아직 없습니다.',
   'Notify me when an athlete finishes': '선수가 운동을 마치면 알림',
   'A push on this device when someone you coach finishes a session.': '코칭하는 사람이 세션을 마치면 이 기기로 알림이 옵니다.',
+  // --- coach activity: progress photos ---
+  "Notify me about my athletes": "내 선수 활동 알림",
+  "A push on this device when someone you coach finishes a session or uploads a progress photo.": "코칭하는 사람이 세션을 마치거나 진행 사진을 올리면 이 기기로 알림이 옵니다.",
+  "No recent activity yet.": "최근 활동이 아직 없습니다.",
+  "{0} uploaded a progress photo": "{0} 님이 진행 사진을 올렸습니다",
+  "{0} uploaded {1} progress photos": "{0} 님이 진행 사진 {1}장을 올렸습니다",
   '{0} finished {1}': '{0} 님이 {1}을(를) 마쳤습니다',
   'a workout': '운동',
   '{0} new': '{0}개 새 알림',

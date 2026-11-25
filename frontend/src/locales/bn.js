@@ -3831,6 +3831,12 @@ export default {
   'No recent workouts yet.': 'এখনও কোনো সাম্প্রতিক ওয়ার্কআউট নেই।',
   'Notify me when an athlete finishes': 'কোনো অ্যাথলিট শেষ করলে জানাবেন',
   'A push on this device when someone you coach finishes a session.': 'আপনি যাকে কোচ করেন তিনি সেশন শেষ করলে এই ডিভাইসে একটি বিজ্ঞপ্তি।',
+  // --- coach activity: progress photos ---
+  "Notify me about my athletes": "আমার অ্যাথলিটদের কার্যকলাপ জানাবেন",
+  "A push on this device when someone you coach finishes a session or uploads a progress photo.": "আপনি যাকে কোচ করেন তিনি সেশন শেষ করলে বা অগ্রগতির ছবি আপলোড করলে এই ডিভাইসে একটি বিজ্ঞপ্তি।",
+  "No recent activity yet.": "এখনও কোনো সাম্প্রতিক কার্যকলাপ নেই।",
+  "{0} uploaded a progress photo": "{0} একটি অগ্রগতির ছবি আপলোড করেছেন",
+  "{0} uploaded {1} progress photos": "{0} {1}টি অগ্রগতির ছবি আপলোড করেছেন",
   '{0} finished {1}': '{0} শেষ করেছে {1}',
   'a workout': 'একটি ওয়ার্কআউট',
   '{0} new': '{0} নতুন',

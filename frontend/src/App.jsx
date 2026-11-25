@@ -373,6 +373,7 @@ function Shell() {
       <Route path="/plan/prog/:id" element={isAthlete(user) ? <Navigate to="/plan" replace /> : <ProgrammeEdit />} />
       <Route path="/team" element={isCoach(user) ? <Team /> : <Navigate to="/home" replace />} />
       <Route path="/team/:id/r/:rid" element={isCoach(user) ? <TeamRoutineEdit /> : <Navigate to="/home" replace />} />
+      <Route path="/team/:id/body" element={isCoach(user) ? <TeamAthlete /> : <Navigate to="/home" replace />} />
       <Route path="/team/:id" element={isCoach(user) ? <TeamAthlete /> : <Navigate to="/home" replace />} />
       <Route path="/diet" element={<Diet />} />
       <Route path="/workout" element={<Workout />} />

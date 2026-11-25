@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { dayReminderPush, restTimerPush, routineEmoji, testPush, workoutFinishedPush } from '../push-messages.js';
+import { dayReminderPush, restTimerPush, routineEmoji, testPush, workoutFinishedPush, bodyPhotoPush } from '../push-messages.js';
 
 test('localizes every server-generated notification in pt-BR', () => {
   assert.deepEqual(restTimerPush('pt-BR'), {
@@ -63,4 +63,20 @@ test('localizes a finished-workout push in es and pt-BR, and falls back to Engli
   assert.equal(workoutFinishedPush('pt', data).title, 'Ana terminou Push', 'pt falls back to pt-BR');
   assert.equal(workoutFinishedPush('fr', data).title, 'Ana finished Push');
   assert.equal(workoutFinishedPush(undefined, { durationMin: 10, sets: 3, volume: 100 }).title, 'openGym finished a workout');
+});
+
+test('localizes a progress-photo push in es and pt-BR, and falls back to English', () => {
+  const extra = { tag: 'body-photo:a1:abc', url: '#/team/a1/body' };
+  assert.deepEqual(bodyPhotoPush('es', { athlete: 'Ana', count: 1, date: '2026-11-25' }, extra), {
+    title: 'Ana ha subido una foto de progreso',
+    body: '2026-11-25',
+    tag: 'body-photo:a1:abc',
+    url: '#/team/a1/body',
+  });
+  assert.equal(bodyPhotoPush('es', { athlete: 'Ana', count: 3, date: '2026-11-25' }).title, 'Ana ha subido 3 fotos de progreso');
+  assert.equal(bodyPhotoPush('pt-BR', { athlete: 'Ana', count: 1 }).title, 'Ana enviou uma foto de progresso');
+  assert.equal(bodyPhotoPush('pt', { athlete: 'Ana', count: 2 }).title, 'Ana enviou 2 fotos de progresso', 'pt falls back to pt-BR');
+  assert.equal(bodyPhotoPush('fr', { athlete: 'Ana', count: 1 }).title, 'Ana uploaded a progress photo');
+  assert.equal(bodyPhotoPush(undefined, { count: 1 }).title, 'openGym uploaded a progress photo');
+  assert.equal(bodyPhotoPush('en', { athlete: 'Ana', count: 1, date: 'not-a-date' }).body, '');
 });

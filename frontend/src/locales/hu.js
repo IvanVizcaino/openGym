@@ -3755,6 +3755,12 @@ export default {
   'No recent workouts yet.': 'Még nincsenek friss edzések.',
   'Notify me when an athlete finishes': 'Értesíts, ha egy sportoló befejezte',
   'A push on this device when someone you coach finishes a session.': 'Értesítés ezen az eszközön, ha valaki, akit edzel, befejez egy edzést.',
+  // --- coach activity: progress photos ---
+  "Notify me about my athletes": "Értesíts a sportolóim tevékenységéről",
+  "A push on this device when someone you coach finishes a session or uploads a progress photo.": "Értesítés ezen az eszközön, ha valaki, akit edzel, befejez egy edzést vagy feltölt egy fejlődési fotót.",
+  "No recent activity yet.": "Még nincs friss tevékenység.",
+  "{0} uploaded a progress photo": "{0} feltöltött egy fejlődési fotót",
+  "{0} uploaded {1} progress photos": "{0} feltöltött {1} fejlődési fotót",
   '{0} finished {1}': '{0} befejezte: {1}',
   'a workout': 'egy edzés',
   '{0} new': '{0} új',

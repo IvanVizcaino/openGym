@@ -243,7 +243,8 @@ describe('sw.js notification click', () => {
     await fire('notificationclick', { notification: { close() {}, data: { url: 'https://evil.example/' } } })
     await fire('notificationclick', { notification: { close() {}, data: { url: 'javascript:alert(1)' } } })
     await fire('notificationclick', { notification: { close() {}, data: { url: '#/coach' } } })
-    expect(opened).toEqual(['./', './', './', './#/coach'])
+    await fire('notificationclick', { notification: { close() {}, data: { url: '#/team/a1/body' } } })
+    expect(opened).toEqual(['./', './', './', './#/coach', './#/team/a1/body'])
   })
 
   it('focuses an already-open window and navigates it when the API exists', async () => {

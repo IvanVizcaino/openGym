@@ -3568,12 +3568,13 @@ paths:
     get:
       tags: [team]
       operationId: teamActivity
-      summary: 'Coach: recent finished workouts of the athletes this coach is linked to'
+      summary: 'Coach: recent activity (finished workouts and progress photos) of linked athletes'
       responses:
         '200':
           description: >-
-            The newest sessions first, at most 50. `unread` is how many were recorded after
-            this coach last called POST /api/team/activity/seen.
+            The newest events first, at most 50. Rows are either a finished workout or a
+            batched progress-photo upload (`type: body.photo`). `unread` is how many were
+            recorded after this coach last called POST /api/team/activity/seen.
           content:
             application/json:
               schema:
@@ -3585,6 +3586,7 @@ paths:
                       type: object
                       properties:
                         id: { type: string }
+                        type: { type: string, description: '`body.photo` for a progress-photo batch; omitted (or treated as a workout) for a finished session.' }
                         athleteId: { type: string }
                         athleteName: { type: string }
                         workoutId: { type: string }
@@ -3595,7 +3597,14 @@ paths:
                         sets: { type: integer }
                         volume: { type: number }
                         unit: { type: string, enum: [kg, lb] }
-                        at: { type: integer, description: When the server recorded the finish, in ms. }
+                        at: { type: integer, description: When the server recorded the event, in ms. }
+                        count: { type: integer, description: 'For `body.photo`: how many new photos were in this upload.' }
+                        thumb:
+                          type: object
+                          description: 'For `body.photo`: the latest photo's hash (and size), for GET /api/team/media/{hash}. Only a coach already allowed to see that athlete can fetch it; the feed never embeds the file.'
+                          properties:
+                            hash: { type: string }
+                            size: { type: integer }
                         coaches:
                           type: array
                           items: { type: string }

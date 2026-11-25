@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import { useNavigate, useParams, useLocation } from 'react-router-dom'
 import { useStore } from '../store/useStore.js'
 import { useUI } from '../store/useUI.js'
 import { api, apiBlob, remoteAuth } from '../lib/api.js'
@@ -159,6 +159,29 @@ function activityLine(it) {
   ].filter(Boolean).join(' · ')
 }
 
+const isPhotoActivity = it => it && it.type === 'body.photo'
+
+function activityTitle(it) {
+  if (isPhotoActivity(it)) {
+    const n = it.count || 1
+    return n === 1
+      ? t('{0} uploaded a progress photo', it.athleteName)
+      : t('{0} uploaded {1} progress photos', it.athleteName, n)
+  }
+  return t('{0} finished {1}', it.athleteName, it.name || t('a workout'))
+}
+
+function activityHref(it) {
+  return isPhotoActivity(it) ? '/team/' + it.athleteId + '/body' : '/team/' + it.athleteId
+}
+
+function ActivityPhotoThumb({ athleteId, thumb }) {
+  const url = useTeamMediaUrl(athleteId, thumb)
+  return <span className="team-act-thumb" aria-hidden="true">
+    {url ? <img src={url} alt="" /> : <Icon name="image" />}
+  </span>
+}
+
 function TeamActivity({ items, fresh, nav }) {
   const n = [...fresh].filter(id => items.some(it => it.id === id)).length
   return <div className="team-act" style={{ margin: '4px 0 16px' }}>
@@ -167,13 +190,14 @@ function TeamActivity({ items, fresh, nav }) {
       {n > 0 && <span className="team-unread" aria-label={t('{0} new', n)}>{n}</span>}
     </div>
     {!items.length
-      ? <p className="sect-f" style={{ marginTop: 4 }}>{t('No recent workouts yet.')}</p>
-      : <div className="list">{items.map(it => <div key={it.id} className={'item' + (fresh.has(it.id) ? ' fresh' : '')} {...tappable(() => nav('/team/' + it.athleteId))}>
-          <span className="lrow-i"><Icon name="flag" /></span>
+      ? <p className="sect-f" style={{ marginTop: 4 }}>{t('No recent activity yet.')}</p>
+      : <div className="list">{items.map(it => <div key={it.id} className={'item' + (fresh.has(it.id) ? ' fresh' : '')} {...tappable(() => nav(activityHref(it)))}>
+          <span className="lrow-i"><Icon name={isPhotoActivity(it) ? 'camera' : 'flag'} /></span>
           <div className="grow">
-            <div className="tt">{t('{0} finished {1}', it.athleteName, it.name || t('a workout'))}</div>
-            <div className="ss">{[it.date ? fmtDate(it.date, true) : null, activityLine(it)].filter(Boolean).join(' · ')}</div>
+            <div className="tt">{activityTitle(it)}</div>
+            <div className="ss">{[it.date ? fmtDate(it.date, true) : null, isPhotoActivity(it) ? null : activityLine(it)].filter(Boolean).join(' · ')}</div>
           </div>
+          {isPhotoActivity(it) && it.thumb?.hash && <ActivityPhotoThumb athleteId={it.athleteId} thumb={it.thumb} />}
           <Icon name="chevronRight" className="chev" />
         </div>)}</div>}
   </div>
@@ -184,9 +208,9 @@ function TeamNotifyRow() {
   const update = useStore(s => s.update)
   return (
     <div className="card" style={{ marginBottom: 14 }}>
-      <Row icon="bell" iconTint="var(--acc)" title={t('Notify me when an athlete finishes')}
-        subtitle={t('A push on this device when someone you coach finishes a session.')}>
-        <Switch checked={on} onChange={v => update(s => { s.teamNotify = v })} aria-label={t('Notify me when an athlete finishes')} />
+      <Row icon="bell" iconTint="var(--acc)" title={t('Notify me about my athletes')}
+        subtitle={t('A push on this device when someone you coach finishes a session or uploads a progress photo.')}>
+        <Switch checked={on} onChange={v => update(s => { s.teamNotify = v })} aria-label={t('Notify me about my athletes')} />
       </Row>
     </div>
   )
@@ -231,12 +255,22 @@ export default function Team() {
 export function TeamAthlete() {
   const nav = useNavigate()
   const { id } = useParams()
+  const location = useLocation()
   const user = useStore(s => s.user)
   const S = useStore(s => s.S)
   const toast = useUI(s => s.toast)
   const openSheet = useUI(s => s.openSheet)
   const [d, setD] = useState(null)
-  const [view, setView] = useState('plan')
+  const tabFromPath = location.pathname.endsWith('/body') ? 'body' : 'plan'
+  const [view, setView] = useState(tabFromPath)
+  useEffect(() => { if (tabFromPath === 'body' && view !== 'body') setView('body') }, [tabFromPath])
+  const changeView = v => {
+    setView(v)
+    const bodyPath = '/team/' + id + '/body'
+    const basePath = '/team/' + id
+    if (v === 'body' && location.pathname !== bodyPath) nav(bodyPath, { replace: true })
+    else if (v !== 'body' && location.pathname === bodyPath) nav(basePath, { replace: true })
+  }
   const load = () => api('/api/team/athlete?id=' + encodeURIComponent(id)).then(setD).catch(e => toast(e.message))
   useEffect(() => { if (isCoach(user)) load() }, [id])
   if (!isCoach(user)) return null
@@ -251,7 +285,7 @@ export function TeamAthlete() {
         <div className="sub">{a.lastWorkout ? t('Last workout {0}', fmtDate(a.lastWorkout)) : t('No workouts yet')}</div></div>
       <Button size="sm" variant="tinted" icon="plus" onClick={assign}>{t('Assign')}</Button>
     </div>
-    <Segmented className="plan-views" value={view} onChange={setView}
+    <Segmented className="plan-views" value={view} onChange={changeView}
       options={[
         { value: 'plan', label: t('Plan') },
         { value: 'body', label: t('Body') },

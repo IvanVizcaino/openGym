@@ -5,7 +5,8 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import {
-  coachesForAthlete, isBackfill, createTeamNotify, BACKFILL_MS, notifyKey, ACTIVITY_KEEP, ACTIVITY_MAX_BYTES,
+  coachesForAthlete, isBackfill, isPhotoBackfill, detectBodyPhotos, createTeamNotify, BACKFILL_MS,
+  notifyKey, ACTIVITY_KEEP, ACTIVITY_MAX_BYTES,
 } from '../team-notify.js';
 
 const COACH = { id: 'c1', name: 'Grego', role: 'coach' };
@@ -209,4 +210,158 @@ test('the store is capped and survives a reload', t => {
   assert.ok(Buffer.byteLength(text) <= ACTIVITY_MAX_BYTES);
   hub._reload();
   assert.equal(hub.listFor('c1').items[0].workoutId, 'n' + (ACTIVITY_KEEP - 1));
+});
+
+const HASH = 'ab'.repeat(32);
+const HASH2 = 'cd'.repeat(32);
+const HASH3 = 'ef'.repeat(32);
+const PHOTO = (hash = HASH, extra = {}) => ({ kind: 'image', hash, mime: 'image/jpeg', size: 1200, width: 100, height: 100, ...extra });
+const DAY = (hash, d, ts, extra = {}) => ({ d, m: PHOTO(hash, extra), _ts: ts });
+
+test('detectBodyPhotos: new dayPhotos and workout stills, not videos, tombstones or moves', () => {
+  const now = NOW;
+  const a = PHOTO(HASH);
+  const b = PHOTO(HASH2);
+  const vid = { kind: 'video', hash: HASH3, mime: 'video/mp4', size: 4000 };
+  assert.deepEqual(detectBodyPhotos({}, {}, { now }), []);
+  const fromDay = detectBodyPhotos(
+    { dayPhotos: {} },
+    { dayPhotos: { [HASH]: DAY(HASH, '2026-11-25', now) } },
+    { now },
+  );
+  assert.equal(fromDay.length, 1);
+  assert.equal(fromDay[0].type, 'body.photo');
+  assert.equal(fromDay[0].hash, HASH);
+  assert.equal(fromDay[0].source, 'day');
+  assert.equal(fromDay[0].date, '2026-11-25');
+
+  const tomb = detectBodyPhotos(
+    { dayPhotos: { [HASH]: DAY(HASH, '2026-11-25', now) } },
+    { dayPhotos: { [HASH]: { _ts: now + 1 } } },
+    { now },
+  );
+  assert.equal(tomb.length, 0);
+
+  const fromWorkout = detectBodyPhotos(
+    { workouts: [{ id: 'w1', d: '2026-11-25', media: [] }] },
+    { workouts: [{ id: 'w1', d: '2026-11-25', media: [a, vid] }] },
+    { now },
+  );
+  assert.equal(fromWorkout.length, 1);
+  assert.equal(fromWorkout[0].hash, HASH);
+  assert.equal(fromWorkout[0].source, 'workout');
+
+  // Already present, or only moved from the day map onto the workout: not new.
+  const moved = detectBodyPhotos(
+    { dayPhotos: { [HASH]: DAY(HASH, '2026-11-25', now) }, workouts: [] },
+    { dayPhotos: { [HASH]: { _ts: now + 1 } }, workouts: [{ id: 'w1', d: '2026-11-25', media: [a] }] },
+    { now },
+  );
+  assert.equal(moved.length, 0);
+
+  const batch = detectBodyPhotos(
+    {},
+    {
+      dayPhotos: { [HASH]: DAY(HASH, '2026-11-24', now - 1000) },
+      workouts: [{ id: 'w1', d: '2026-11-25', media: [b] }],
+    },
+    { now },
+  );
+  assert.deepEqual(batch.map(p => p.hash), [HASH, HASH2]);
+});
+
+test('several new photos in one write become one feed row and one push', t => {
+  const { hub, sent } = harness(t);
+  const r = hub.onStateWrite(ANA, { dayPhotos: {} }, {
+    dayPhotos: {
+      [HASH]: DAY(HASH, '2026-11-25', NOW - 2000),
+      [HASH2]: DAY(HASH2, '2026-11-25', NOW - 1000),
+      [HASH3]: DAY(HASH3, '2026-11-25', NOW),
+    },
+  });
+  assert.equal(r.recorded, 1);
+  assert.equal(r.pushed, 1);
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].uid, 'c1');
+  assert.equal(sent[0].payload.url, '#/team/a1/body');
+  assert.match(sent[0].payload.tag, /^body-photo:a1:/);
+  assert.equal(sent[0].payload.title, 'Ana uploaded 3 progress photos');
+  assert.equal(sent[0].payload.body, '2026-11-25');
+
+  const feed = hub.listFor('c1');
+  assert.equal(feed.items.length, 1);
+  assert.equal(feed.items[0].type, 'body.photo');
+  assert.equal(feed.items[0].count, 3);
+  assert.equal(feed.items[0].thumb.hash, HASH3);
+  assert.equal(feed.items[0].thumb.size, 1200);
+  assert.equal(hub.listFor('c2').items.length, 0);
+});
+
+test('re-syncing the same photo hashes does not notify again', t => {
+  const { hub, sent } = harness(t);
+  const next = { dayPhotos: { [HASH]: DAY(HASH, '2026-11-25', NOW) } };
+  hub.onStateWrite(ANA, { dayPhotos: {} }, next);
+  sent.length = 0;
+  assert.deepEqual(hub.onStateWrite(ANA, next, next), { recorded: 0, pushed: 0 });
+  // Deleted, then the same file comes back.
+  const again = hub.onStateWrite(ANA, { dayPhotos: {} }, { dayPhotos: { [HASH]: DAY(HASH, '2026-11-25', NOW + 1000) } });
+  assert.deepEqual(again, { recorded: 0, pushed: 0 });
+  assert.equal(sent.length, 0);
+  assert.equal(hub.listFor('c1').items.length, 1);
+});
+
+test('a photo backfill older than 12 hours is listed and not pushed', t => {
+  const { hub, sent } = harness(t);
+  const r = hub.onStateWrite(ANA, {}, {
+    dayPhotos: { [HASH]: DAY(HASH, '2026-11-01', NOW - BACKFILL_MS - 1000) },
+  });
+  assert.equal(r.recorded, 1);
+  assert.equal(r.pushed, 0);
+  assert.equal(sent.length, 0);
+  assert.equal(hub.listFor('c1').items[0].type, 'body.photo');
+  assert.equal(isPhotoBackfill({ at: NOW - BACKFILL_MS - 1 }, NOW), true);
+  assert.equal(isPhotoBackfill({ at: NOW - 1000 }, NOW), false);
+});
+
+test('a mixed photo batch still pushes if one file is recent', t => {
+  const { hub, sent } = harness(t);
+  const r = hub.onStateWrite(ANA, {}, {
+    dayPhotos: {
+      [HASH]: DAY(HASH, '2026-11-01', NOW - BACKFILL_MS - 1000),
+      [HASH2]: DAY(HASH2, '2026-11-25', NOW - 1000),
+    },
+  });
+  assert.equal(r.recorded, 1);
+  assert.equal(r.pushed, 1);
+  assert.equal(sent.length, 1);
+});
+
+test('photo opt-out turns the push off but the feed still records the upload', t => {
+  const { hub, sent } = harness(t, { states: { c1: { teamNotify: false, lang: 'en' } } });
+  const r = hub.onStateWrite(ANA, {}, { dayPhotos: { [HASH]: DAY(HASH, '2026-11-25', NOW) } });
+  assert.equal(r.recorded, 1);
+  assert.equal(r.pushed, 0);
+  assert.equal(sent.length, 0);
+  assert.equal(hub.listFor('c1').items[0].type, 'body.photo');
+});
+
+test('the photo push follows the coach language', t => {
+  const { hub, sent } = harness(t, { states: { c1: { lang: 'es' } } });
+  // Photo added to an already-logged workout: no new session, only the photo event.
+  const w = { id: 'w1', d: '2026-11-25', name: 'Push' };
+  hub.onStateWrite(ANA, { workouts: [w] }, { workouts: [{ ...w, media: [PHOTO()] }] });
+  assert.equal(sent.length, 1);
+  assert.equal(sent[0].payload.title, 'Ana ha subido una foto de progreso');
+  assert.equal(sent[0].payload.url, '#/team/a1/body');
+});
+
+test('a workout finish and a photo in the same write are both recorded', t => {
+  const { hub, sent } = harness(t);
+  const w = W('w1', 60_000, { media: [PHOTO()] });
+  const r = hub.onStateWrite(ANA, { workouts: [] }, { workouts: [w], unit: 'kg' });
+  assert.equal(r.recorded, 2);
+  assert.equal(r.pushed, 2);
+  assert.equal(sent.length, 2);
+  const types = hub.listFor('c1').items.map(it => it.type || 'workout.finished');
+  assert.deepEqual(new Set(types), new Set(['workout.finished', 'body.photo']));
 });

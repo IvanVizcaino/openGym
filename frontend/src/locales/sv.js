@@ -3799,6 +3799,12 @@ export default {
   'No recent workouts yet.': 'Inga nya träningspass ännu.',
   'Notify me when an athlete finishes': 'Meddela mig när en atlet är klar',
   'A push on this device when someone you coach finishes a session.': 'En notis på den här enheten när någon du coachar avslutar ett pass.',
+  // --- coach activity: progress photos ---
+  "Notify me about my athletes": "Meddela mig om mina atleters aktivitet",
+  "A push on this device when someone you coach finishes a session or uploads a progress photo.": "En notis på den här enheten när någon du coachar avslutar ett pass eller laddar upp ett framstegsfoto.",
+  "No recent activity yet.": "Ingen ny aktivitet ännu.",
+  "{0} uploaded a progress photo": "{0} laddade upp ett framstegsfoto",
+  "{0} uploaded {1} progress photos": "{0} laddade upp {1} framstegsfoton",
   '{0} finished {1}': '{0} avslutade {1}',
   'a workout': 'ett pass',
   '{0} new': '{0} nya',
